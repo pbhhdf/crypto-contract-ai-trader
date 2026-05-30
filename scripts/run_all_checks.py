@@ -229,6 +229,7 @@ def main() -> int:
                 "scripts/check_exchange_recovery.py",
                 "scripts/check_exchange_emergency.py",
                 "scripts/check_private_stream_mapping.py",
+                "scripts/check_private_stream_health.py",
                 "scripts/check_binance_testnet_validate.py",
                 "scripts/check_binance_testnet_place_order.py",
                 "scripts/check_binance_live_guard.py",
@@ -320,6 +321,7 @@ def main() -> int:
         steps.append(run_server_step("exchange_recovery", [PYTHON, "scripts/check_exchange_recovery.py"], timeout=120))
         steps.append(run_server_step("exchange_emergency", [PYTHON, "scripts/check_exchange_emergency.py"], timeout=120))
         steps.append(run_server_step("private_stream_mapping", [PYTHON, "scripts/check_private_stream_mapping.py"], timeout=60))
+        steps.append(run_step("private_stream_health", [PYTHON, "scripts/check_private_stream_health.py"], timeout=60))
         steps.append(run_server_step("binance_live_guard", [PYTHON, "scripts/check_binance_live_guard.py"], timeout=120))
         steps.append(run_server_step("scheduler", [PYTHON, "scripts/check_scheduler.py"], timeout=150))
         steps.append(run_server_step("backtest", [PYTHON, "scripts/check_backtest.py"], timeout=120))

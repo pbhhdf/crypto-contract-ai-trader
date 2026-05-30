@@ -354,6 +354,13 @@ def seconds_since(value: str | None) -> float | None:
     return max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds())
 
 
+def seconds_until(value: str | None) -> float | None:
+    parsed = parse_iso_datetime(value)
+    if not parsed:
+        return None
+    return (parsed - datetime.now(timezone.utc)).total_seconds()
+
+
 def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -1279,8 +1286,9 @@ def run_watchdog_checks() -> dict[str, Any]:
         resolve_alert("exchange.recovery_stale", "恢复同步在阈值内")
 
     stream = binance_user_stream_status()
+    stream_health = evaluate_binance_user_stream_health(stream)
     stream_has_key = bool(stream.get("listen_key_present"))
-    if stream_has_key and not stream.get("dependency_ready"):
+    if stream_has_key and "Python websockets dependency is not available" in stream_health.get("failures", []):
         raise_alert(
             "stream.dependency_missing",
             "critical",
@@ -1293,23 +1301,20 @@ def run_watchdog_checks() -> dict[str, Any]:
         resolve_alert("stream.dependency_missing", "私有流依赖可用或未启用")
 
     stream_status = str(stream.get("status") or "")
-    if stream_has_key and (
-        not stream.get("consumer_running")
-        or stream_status in {"error", "expired"}
-    ):
+    if stream_has_key and stream_health.get("status") == "fail":
         raise_alert(
             "stream.consumer_down",
             "critical",
             "Private User Stream",
             "私有回报流消费线程异常",
-            "listenKey 存在但消费线程未运行或状态异常，订单/仓位回报可能延迟。",
-            {"stream": stream},
+            stream_health.get("detail") or "listenKey 存在但消费线程未运行或状态异常，订单/仓位回报可能延迟。",
+            {"stream": stream, "stream_health": stream_health, "stream_status": stream_status},
         )
     else:
         resolve_alert("stream.consumer_down", "私有流消费线程正常或未启用")
 
-    last_event_age = seconds_since(str(stream.get("last_event_at") or ""))
-    if stream_has_key and stream.get("consumer_running") and last_event_age is not None and last_event_age > PRIVATE_STREAM_STALE_SECONDS:
+    last_event_age = stream_health.get("last_event_age_seconds")
+    if stream_has_key and stream_health.get("status") == "warn" and stream_health.get("last_event_age_seconds") is not None:
         raise_alert(
             "stream.events_stale",
             "warning",
@@ -1318,6 +1323,7 @@ def run_watchdog_checks() -> dict[str, Any]:
             "私有流长时间没有事件，若账户有活动请检查连接和 Binance 状态。",
             {
                 "stream": stream,
+                "stream_health": stream_health,
                 "threshold_seconds": PRIVATE_STREAM_STALE_SECONDS,
                 "age_seconds": last_event_age,
             },
@@ -6379,19 +6385,14 @@ def go_live_gate_status() -> dict[str, Any]:
 
     stream = recovery.get("user_stream") or binance_user_stream_status()
     stream_required = GO_LIVE_REQUIRE_PRIVATE_STREAM and (live_requested or live_mode_enabled)
-    stream_ok = (
-        stream.get("dependency_ready")
-        and stream.get("listen_key_present")
-        and stream.get("consumer_running")
-        and stream.get("status") == "active"
-        and stream.get("mode") == "live_guarded"
-    )
+    stream_health = evaluate_binance_user_stream_health(stream, require_live=stream_required)
+    stream_ok = stream_health.get("status") == "pass"
     add_gate(
         "private_user_stream",
         "私有回报流",
         "pass" if stream_ok else ("fail" if stream_required else "warn"),
-        "Binance live user-data stream 已运行。" if stream_ok else "实盘前需要 live listenKey 和私有回报流消费线程运行。",
-        {"stream": stream, "required": stream_required},
+        "Binance live user-data stream 已运行且健康。" if stream_ok else stream_health.get("detail") or "实盘前需要 live listenKey 和私有回报流消费线程运行。",
+        {"stream": stream, "stream_health": stream_health, "required": stream_required},
         required_for_live=stream_required,
     )
 
@@ -8250,17 +8251,15 @@ def deployment_readiness() -> dict[str, Any]:
         ),
     )
     user_stream = recovery.get("user_stream") or {}
-    stream_has_key = bool(user_stream.get("listen_key_present"))
-    stream_ok = user_stream.get("dependency_ready") and (
-        not stream_has_key or user_stream.get("consumer_running")
-    )
+    stream_health = evaluate_binance_user_stream_health(user_stream)
     add(
         "Private user stream",
-        "pass" if stream_ok else "warn",
+        "pass" if stream_health.get("status") == "pass" else "warn",
         (
-            f"WebSocket 依赖={source_label(str(user_stream.get('dependency_ready')))}，"
-            f"listenKey={source_label(str(stream_has_key))}，"
+            f"健康={source_label(stream_health.get('status'))}，"
+            f"listenKey={source_label(str(user_stream.get('listen_key_present')))}，"
             f"消费线程={source_label(str(user_stream.get('consumer_running')))}，"
+            f"WebSocket={source_label(str(user_stream.get('websocket_connected')))}，"
             f"最近事件={user_stream.get('last_event_type') or '-'}。"
         ),
     )
@@ -9897,10 +9896,63 @@ def binance_key_request_for_mode(method: str, path: str, params: dict[str, Any],
         return json.loads(raw) if raw.strip() else {}
 
 
-def binance_user_stream_status() -> dict[str, Any]:
+def evaluate_binance_user_stream_health(stream: dict[str, Any], require_live: bool = False) -> dict[str, Any]:
+    failures: list[str] = []
+    warnings: list[str] = []
+    listen_key_present = bool(stream.get("listen_key_present"))
+    stream_status = str(stream.get("status") or "stopped")
+    mode = str(stream.get("mode") or "")
+    event_count = int(float(stream.get("event_count") or 0))
+    event_age = seconds_since(str(stream.get("last_event_at") or ""))
+    expires_in = seconds_until(str(stream.get("expires_at") or ""))
+
+    if require_live and mode != "live_guarded":
+        failures.append("live mode requires a live_guarded Binance user stream")
+    if not listen_key_present:
+        (failures if require_live else warnings).append("listenKey is not present")
+    if listen_key_present and not stream.get("dependency_ready"):
+        failures.append("Python websockets dependency is not available")
+    if listen_key_present and stream_status in {"error", "expired"}:
+        failures.append(f"user stream status is {stream_status}")
+    if listen_key_present and stream.get("last_error"):
+        failures.append(f"user stream has last_error: {stream.get('last_error')}")
+    if listen_key_present and expires_in is None:
+        failures.append("listenKey expiry timestamp is missing")
+    elif listen_key_present and expires_in <= 0:
+        failures.append("listenKey has expired")
+    elif listen_key_present and expires_in < 300:
+        warnings.append("listenKey expires in less than 5 minutes")
+    if listen_key_present and not stream.get("consumer_running"):
+        failures.append("user stream consumer thread is not running")
+    if listen_key_present and stream_status == "active" and not stream.get("websocket_connected"):
+        failures.append("user stream is active but WebSocket is not connected")
+    if event_count > 0 and event_age is not None and event_age > PRIVATE_STREAM_STALE_SECONDS:
+        (failures if require_live else warnings).append(
+            f"last private stream event is stale: {event_age:.1f}s"
+        )
+
+    health_status = "fail" if failures else "warn" if warnings else "pass"
+    return {
+        "status": health_status,
+        "detail": (
+            "私有回报流健康。"
+            if health_status == "pass"
+            else "；".join(failures or warnings)
+        ),
+        "failures": failures,
+        "warnings": warnings,
+        "required_live": require_live,
+        "expires_in_seconds": round(expires_in, 1) if expires_in is not None else None,
+        "last_event_age_seconds": round(event_age, 1) if event_age is not None else None,
+        "stale_threshold_seconds": PRIVATE_STREAM_STALE_SECONDS,
+        "checked_at": utc_now(),
+    }
+
+
+def binance_user_stream_status(include_health: bool = True) -> dict[str, Any]:
     mode = get_setting("binance_user_stream_mode", "")
     listen_key = get_setting("binance_user_stream_listen_key", "")
-    return {
+    status = {
         "mode": mode,
         "mode_label": mode_label(mode) if mode else "-",
         "status": get_setting("binance_user_stream_status", "stopped"),
@@ -9920,6 +9972,9 @@ def binance_user_stream_status() -> dict[str, Any]:
         "event_count": int(float(get_setting("binance_user_stream_event_count", "0") or "0")),
         "note": "已接入 Binance user data WebSocket 消费线程；事件会写入审计表并驱动 OMS 状态更新。",
     }
+    if include_health:
+        status["health"] = evaluate_binance_user_stream_health(status)
+    return status
 
 
 def start_binance_user_stream(mode: str) -> dict[str, Any]:
@@ -10383,6 +10438,7 @@ def recover_exchange_state(trigger: str = "manual") -> dict[str, Any]:
         "account_snapshots": [],
         "position_modes": [],
         "user_stream": binance_user_stream_status(),
+        "user_stream_health": {},
         "warnings": [],
         "errors": [],
     }
@@ -10414,6 +10470,7 @@ def recover_exchange_state(trigger: str = "manual") -> dict[str, Any]:
             report["warnings"].append(f"Binance user stream keepalive failed: {exc.__class__.__name__}: {exc}")
             report["user_stream"] = binance_user_stream_status()
 
+    report["user_stream_health"] = evaluate_binance_user_stream_health(report["user_stream"])
     report["completed_at"] = utc_now()
     set_setting("exchange_recovery_last_at", report["completed_at"])
     set_setting("exchange_recovery_last_report", json.dumps(report, ensure_ascii=False))
@@ -10456,6 +10513,7 @@ def compact_exchange_recovery_status(recovery: dict[str, Any] | None = None) -> 
         "warnings": (report.get("warnings") or [])[:8] if isinstance(report, dict) else [],
         "errors": (report.get("errors") or [])[:8] if isinstance(report, dict) else [],
         "position_modes": (report.get("position_modes") or [])[:8] if isinstance(report, dict) else [],
+        "user_stream_health": report.get("user_stream_health") if isinstance(report, dict) else {},
     }
     stream_events = source.get("stream_events")
     if isinstance(stream_events, dict):
@@ -10482,6 +10540,10 @@ def compact_exchange_recovery_status(recovery: dict[str, Any] | None = None) -> 
             if isinstance(snapshot, dict)
         ],
         "user_stream": source.get("user_stream"),
+        "user_stream_health": (
+            (report.get("user_stream_health") if isinstance(report, dict) else None)
+            or evaluate_binance_user_stream_health(source.get("user_stream") or {})
+        ),
         "stream_events": compact_events,
         "stream_summary": source.get("stream_summary"),
     }
@@ -12099,6 +12161,10 @@ def go_live_report() -> dict[str, Any]:
         "position_modes": recovery_report.get("position_modes") or [],
         "stream_event_summary": stream_event_summary,
         "user_stream": recovery.get("user_stream"),
+        "user_stream_health": (
+            recovery_report.get("user_stream_health")
+            or evaluate_binance_user_stream_health(recovery.get("user_stream") or {})
+        ),
     }
     if "orders" in compact_recovery and "orders" in compact_recovery["orders"]:
         compact_recovery["orders"] = {
