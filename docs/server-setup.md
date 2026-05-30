@@ -107,7 +107,10 @@ BINANCE_REQUIRE_ONE_WAY_POSITION_MODE=true
 
 `APP_BASIC_AUTH_PASSWORD` must be at least 16 characters. Basic Auth also has an
 in-process failed-login throttle: by default 8 failed attempts from one client
-inside 300 seconds lock that client for 900 seconds. Exchange API keys are
+inside 300 seconds lock that client for 900 seconds. The local check suite
+starts a temporary authenticated HTTP server and verifies the real `/api/state`
+path returns `401` then `429` with `Retry-After`, while `/api/health` stays
+available for monitoring. Exchange API keys are
 not needed for paper mode. The AI operator profile above is intentionally
 powerful: it can edit files and run shell commands as the service user, so keep
 the UI behind Tailscale and Basic Auth. Change `AI_OPERATOR_PROVIDER` to `codex`
