@@ -4633,6 +4633,30 @@ def get_child_protection_orders(parent_order_id: str) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def parent_terminal_fill_quantity(payload: dict[str, Any] | None) -> float:
+    payload = payload or {}
+    candidates: list[Any] = []
+    response = payload.get("response") if isinstance(payload.get("response"), dict) else {}
+    event = payload.get("event") if isinstance(payload.get("event"), dict) else {}
+    order_update = event.get("o") if isinstance(event.get("o"), dict) else {}
+    candidates.extend(
+        [
+            response.get("executedQty"),
+            response.get("cumQty"),
+            response.get("cumBase"),
+            response.get("executed_qty"),
+            order_update.get("z"),
+            order_update.get("cumFilled"),
+            order_update.get("executedQty"),
+        ]
+    )
+    for candidate in candidates:
+        quantity = safe_float(candidate, 0.0)
+        if quantity > 0:
+            return quantity
+    return 0.0
+
+
 def cancel_child_protections_for_terminal_parent(
     parent_order: dict[str, Any],
     mode: str,
@@ -4648,6 +4672,7 @@ def cancel_child_protections_for_terminal_parent(
     parent_order_id = str(parent_order.get("id") or "")
     if not parent_order_id:
         return []
+    filled_quantity = parent_terminal_fill_quantity(payload)
     attempts: list[dict[str, Any]] = []
     for child in get_child_protection_orders(parent_order_id):
         attempt = {
@@ -4656,8 +4681,16 @@ def cancel_child_protections_for_terminal_parent(
             "previous_status": child.get("status"),
             "trigger": trigger,
             "parent_venue_status": venue_status,
+            "parent_executed_quantity": filled_quantity,
         }
-        if child.get("status") not in CANCELABLE_BINANCE_ORDER_STATUSES:
+        if filled_quantity > 0:
+            attempt.update(
+                {
+                    "status": "kept",
+                    "reason": "parent_terminal_with_partial_fill_keep_protection",
+                }
+            )
+        elif child.get("status") not in CANCELABLE_BINANCE_ORDER_STATUSES:
             attempt.update({"status": "skipped", "reason": "child_order_not_cancelable"})
         else:
             try:
@@ -4681,14 +4714,20 @@ def cancel_child_protections_for_terminal_parent(
         attempts.append(attempt)
     if not attempts:
         return []
+    transition_reason = (
+        "binance_child_protection_kept_after_parent_partial_terminal"
+        if filled_quantity > 0
+        else "binance_child_protection_cancel_after_parent_terminal"
+    )
     insert_order_transition(
         parent_order_id,
         parent_order.get("status"),
         parent_order.get("status", "terminal"),
-        "binance_child_protection_cancel_after_parent_terminal",
+        transition_reason,
         {
             "trigger": trigger,
             "parent_venue_status": venue_status,
+            "parent_executed_quantity": filled_quantity,
             "attempts": attempts,
             "payload": payload or {},
         },
@@ -10284,7 +10323,7 @@ def handle_private_order_update(mode: str, event: dict[str, Any]) -> tuple[bool,
     if child_attempts:
         return True, (
             f"Updated local order {updated['id']} from private stream; "
-            f"child protection cancel attempts={len(child_attempts)}."
+            f"child protection terminal-parent actions={len(child_attempts)}."
         )
     return True, f"Updated local order {updated['id']} from private stream."
 

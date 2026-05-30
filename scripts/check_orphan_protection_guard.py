@@ -57,7 +57,7 @@ def cleanup(order_ids: list[str]) -> None:
         conn.commit()
 
 
-def private_order_event(client_order_id: str, venue_status: str) -> dict[str, Any]:
+def private_order_event(client_order_id: str, venue_status: str, filled_qty: str = "0") -> dict[str, Any]:
     return {
         "e": "ORDER_TRADE_UPDATE",
         "o": {
@@ -65,7 +65,7 @@ def private_order_event(client_order_id: str, venue_status: str) -> dict[str, An
             "i": 987654321,
             "x": venue_status,
             "X": venue_status,
-            "z": "0",
+            "z": filled_qty,
             "ap": "0",
             "rp": "0",
         },
@@ -79,9 +79,24 @@ def main() -> int:
     reconcile_child = f"TESTLIVE-ORPHAN-REC-SL-{suffix}"
     stream_parent = f"TESTLIVE-ORPHAN-STR-{suffix}"
     stream_child = f"TESTLIVE-ORPHAN-STR-SL-{suffix}"
+    partial_reconcile_parent = f"TESTLIVE-ORPHAN-PREC-{suffix}"
+    partial_reconcile_child = f"TESTLIVE-ORPHAN-PREC-SL-{suffix}"
+    partial_stream_parent = f"TESTLIVE-ORPHAN-PSTR-{suffix}"
+    partial_stream_child = f"TESTLIVE-ORPHAN-PSTR-SL-{suffix}"
     filled_parent = f"TESTLIVE-ORPHAN-FILL-{suffix}"
     filled_child = f"TESTLIVE-ORPHAN-FILL-SL-{suffix}"
-    order_ids = [reconcile_parent, reconcile_child, stream_parent, stream_child, filled_parent, filled_child]
+    order_ids = [
+        reconcile_parent,
+        reconcile_child,
+        stream_parent,
+        stream_child,
+        partial_reconcile_parent,
+        partial_reconcile_child,
+        partial_stream_parent,
+        partial_stream_child,
+        filled_parent,
+        filled_child,
+    ]
     original = {
         "ENABLE_BINANCE_TESTNET": server.ENABLE_BINANCE_TESTNET,
         "BINANCE_API_KEY": server.BINANCE_API_KEY,
@@ -99,10 +114,11 @@ def main() -> int:
         def fake_signed(method: str, path: str, params: dict[str, Any], mode: str) -> dict[str, Any]:
             calls.append({"method": method, "path": path, "params": params, "mode": mode})
             if method == "GET" and path == "/fapi/v1/order":
+                executed_qty = "0.005" if params.get("origClientOrderId") == partial_reconcile_parent else "0"
                 return {
                     "status": "EXPIRED",
                     "orderId": "VENUE-PARENT-EXPIRED",
-                    "executedQty": "0",
+                    "executedQty": executed_qty,
                     "avgPrice": "0",
                 }
             if method == "DELETE" and path == "/fapi/v1/order":
@@ -130,7 +146,7 @@ def main() -> int:
             "binance_testnet_place_order",
             private_order_event(stream_parent, "CANCELED"),
         )
-        if not processed or "child protection cancel attempts=1" not in note:
+        if not processed or "child protection terminal-parent actions=1" not in note:
             return fail("private stream update did not report child protection cleanup", {"processed": processed, "note": note})
         stream_child_order = server.get_order(stream_child) or {}
         if stream_child_order.get("status") != "testnet_protection_canceled":
@@ -138,6 +154,36 @@ def main() -> int:
         stream_cancel_ids = [call["params"].get("origClientOrderId") for call in calls if call["method"] == "DELETE"]
         if stream_cancel_ids != [stream_child]:
             return fail("private stream cleanup did not cancel the expected child order", calls)
+
+        calls.clear()
+        server.persist_order(make_order(partial_reconcile_parent, "testnet_submitted"))
+        server.persist_order(make_order(partial_reconcile_child, "testnet_protection_submitted", partial_reconcile_parent, "stop_loss"))
+        partial_reconciled = server.reconcile_order(partial_reconcile_parent)
+        partial_reconcile_attempts = partial_reconciled.get("child_protection_cancel_attempts") or []
+        if len(partial_reconcile_attempts) != 1 or partial_reconcile_attempts[0].get("status") != "kept":
+            return fail("partial-fill reconcile should keep child protection active", partial_reconciled)
+        partial_reconcile_child_order = server.get_order(partial_reconcile_child) or {}
+        if partial_reconcile_child_order.get("status") != "testnet_protection_submitted":
+            return fail("partial-fill reconcile canceled child protection unexpectedly", partial_reconcile_child_order)
+        partial_reconcile_cancel_ids = [call["params"].get("origClientOrderId") for call in calls if call["method"] == "DELETE"]
+        if partial_reconcile_cancel_ids:
+            return fail("partial-fill reconcile should not send child cancel requests", calls)
+
+        calls.clear()
+        server.persist_order(make_order(partial_stream_parent, "testnet_submitted"))
+        server.persist_order(make_order(partial_stream_child, "testnet_protection_submitted", partial_stream_parent, "stop_loss"))
+        processed, note = server.handle_private_order_update(
+            "binance_testnet_place_order",
+            private_order_event(partial_stream_parent, "CANCELED", filled_qty="0.005"),
+        )
+        if not processed or "child protection terminal-parent actions=1" not in note:
+            return fail("partial-fill private stream update did not preserve child evidence", {"processed": processed, "note": note})
+        partial_stream_child_order = server.get_order(partial_stream_child) or {}
+        if partial_stream_child_order.get("status") != "testnet_protection_submitted":
+            return fail("partial-fill private stream canceled child protection unexpectedly", partial_stream_child_order)
+        partial_stream_cancel_ids = [call["params"].get("origClientOrderId") for call in calls if call["method"] == "DELETE"]
+        if partial_stream_cancel_ids:
+            return fail("partial-fill private stream should not send child cancel requests", calls)
 
         calls.clear()
         server.persist_order(make_order(filled_parent, "testnet_submitted"))
@@ -162,6 +208,8 @@ def main() -> int:
                     "reconcile_parent_status": reconciled.get("status"),
                     "reconcile_child_status": reconcile_child_order.get("status"),
                     "stream_child_status": stream_child_order.get("status"),
+                    "partial_reconcile_child_status": partial_reconcile_child_order.get("status"),
+                    "partial_stream_child_status": partial_stream_child_order.get("status"),
                     "filled_child_status": filled_child_order.get("status"),
                 },
                 ensure_ascii=False,
