@@ -358,7 +358,8 @@ body[data-active-view="overview"] .account-grid {
 }
 
 .evidence-detail-group,
-.ops-detail-group {
+.ops-detail-group,
+.live-detail-group {
   margin-top: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -379,7 +380,8 @@ body[data-active-view="overview"] .account-grid {
 }
 
 .evidence-detail-group summary,
-.ops-detail-group summary {
+.ops-detail-group summary,
+.live-detail-group summary {
   display: flex;
   min-height: 42px;
   padding: 11px 12px;
@@ -401,7 +403,8 @@ body[data-active-view="overview"] .account-grid {
 }
 
 .evidence-detail-group summary small,
-.ops-detail-group summary small {
+.ops-detail-group summary small,
+.live-detail-group summary small {
   min-width: 0;
   color: var(--muted);
   font-size: 12px;
@@ -414,7 +417,8 @@ body[data-active-view="overview"] .account-grid {
 }
 
 .evidence-detail-group[open],
-.ops-detail-group[open] {
+.ops-detail-group[open],
+.live-detail-group[open] {
   padding: 0 12px 12px;
 }
 
@@ -425,7 +429,8 @@ body[data-active-view="overview"] .account-grid {
 }
 
 .evidence-detail-group[open] summary,
-.ops-detail-group[open] summary {
+.ops-detail-group[open] summary,
+.live-detail-group[open] summary {
   margin: 0 -12px 10px;
   border-bottom: 1px solid var(--line);
   background: #f6f9fd;
@@ -439,7 +444,11 @@ body[data-active-view="overview"] .account-grid {
 .evidence-detail-group .table-wrap,
 .ops-detail-group .guidance-grid,
 .evidence-detail-group .guidance-grid,
-.evidence-detail-group .readiness-list {
+.evidence-detail-group .readiness-list,
+.live-detail-group .guidance-grid,
+.live-detail-group .evidence-chip-grid,
+.live-detail-group .live-gate-facts,
+.live-detail-group .final-live-ready {
   max-height: 340px;
   overflow: auto;
 }

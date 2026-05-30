@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard9" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard10" />
   </head>
   <body>
     <header class="topbar">
@@ -382,7 +382,18 @@
             <strong id="server-live-readiness-blockers">-</strong>
           </article>
         </div>
+        <details class="live-detail-group">
+          <summary>
+            <span>准入推进器证据</span>
+            <small>展开查看报告与检查证据</small>
+          </summary>
         <div id="server-live-readiness-evidence" class="evidence-chip-grid"></div>
+        </details>
+        <details class="live-detail-group">
+          <summary>
+            <span>服务器环境剖面</span>
+            <small>展开审计变量、缺口和下一步</small>
+          </summary>
         <div class="live-env-profile-panel">
           <div class="panel-heading small-heading">
             <h3>服务器环境剖面</h3>
@@ -408,6 +419,12 @@
           </div>
           <div id="live-env-profile-list" class="guidance-grid"></div>
         </div>
+        </details>
+        <details class="live-detail-group">
+          <summary>
+            <span>实盘人工证据</span>
+            <small>展开填写审批与外部备份证据</small>
+          </summary>
         <div class="live-attestation-panel">
           <div class="panel-heading small-heading">
             <h3>实盘人工证据</h3>
@@ -438,9 +455,16 @@
           </div>
           <div id="live-attestation-list" class="guidance-grid"></div>
         </div>
+        </details>
+        <details class="live-detail-group">
+          <summary>
+            <span>门禁检查明细</span>
+            <small>展开查看准入状态、最终检查和阻塞项</small>
+          </summary>
         <div id="live-gate-facts" class="live-gate-facts"></div>
         <div id="final-live-ready" class="final-live-ready"></div>
         <div id="live-gate-list" class="guidance-grid"></div>
+        </details>
       </section>
 
       <section class="metrics-grid">
@@ -1149,6 +1173,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard9"></script>
+    <script src="/app.js?v=20260531-dashboard10"></script>
   </body>
 </html>
