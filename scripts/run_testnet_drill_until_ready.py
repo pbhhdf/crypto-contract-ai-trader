@@ -199,6 +199,8 @@ def main() -> int:
                     "cycle_id": cycle.get("id"),
                     "status": cycle.get("status"),
                     "note": cycle.get("note"),
+                    "real_cycle_counted": cycle.get("real_cycle_counted"),
+                    "order_evidence": cycle.get("order_evidence"),
                     "real_completed_cycles": status.get("real_completed_cycles"),
                     "dry_run_completed_cycles": status.get("dry_run_completed_cycles"),
                     "completed_cycles": status.get("completed_cycles"),

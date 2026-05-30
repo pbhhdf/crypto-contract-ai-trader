@@ -391,6 +391,20 @@ def ensure_order_columns(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE orders SET venue_status = UPPER(status) WHERE venue_status IS NULL OR venue_status = ''")
 
 
+def ensure_testnet_drill_cycle_columns(conn: sqlite3.Connection) -> None:
+    existing = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(testnet_drill_cycles)").fetchall()
+    }
+    columns = {
+        "order_evidence": "TEXT NOT NULL DEFAULT '{}'",
+        "real_cycle_counted": "TEXT NOT NULL DEFAULT 'false'",
+    }
+    for name, ddl in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE testnet_drill_cycles ADD COLUMN {name} {ddl}")
+
+
 def init_db() -> None:
     with DB_LOCK, connect() as conn:
         conn.executescript(
@@ -568,6 +582,8 @@ def init_db() -> None:
                 status TEXT NOT NULL,
                 run_id TEXT,
                 order_id TEXT,
+                order_evidence TEXT NOT NULL DEFAULT '{}',
+                real_cycle_counted TEXT NOT NULL DEFAULT 'false',
                 recovery_report TEXT NOT NULL DEFAULT '{}',
                 alert_summary TEXT NOT NULL DEFAULT '{}',
                 stream_summary TEXT NOT NULL DEFAULT '{}',
@@ -661,6 +677,7 @@ def init_db() -> None:
             list(defaults.items()),
         )
         ensure_order_columns(conn)
+        ensure_testnet_drill_cycle_columns(conn)
         conn.commit()
 
 
@@ -6569,6 +6586,9 @@ def go_live_gate_status() -> dict[str, Any]:
             "target_cycles": drill["target_cycles"],
             "last_real_cycle_at": drill["last_real_cycle_at"],
             "last_real_cycle_id": drill["last_real_cycle_id"],
+            "last_real_cycle": compact_testnet_drill_cycle(get_testnet_drill_cycle(drill["last_real_cycle_id"]))
+            if drill["last_real_cycle_id"]
+            else None,
         },
     )
 
@@ -7024,6 +7044,8 @@ def update_testnet_drill_cycle(cycle_id: str, **fields: Any) -> dict[str, Any]:
         "status",
         "run_id",
         "order_id",
+        "order_evidence",
+        "real_cycle_counted",
         "recovery_report",
         "alert_summary",
         "stream_summary",
@@ -7033,8 +7055,10 @@ def update_testnet_drill_cycle(cycle_id: str, **fields: Any) -> dict[str, Any]:
     for key, value in fields.items():
         if key not in allowed:
             continue
-        if key in {"recovery_report", "alert_summary", "stream_summary"} and not isinstance(value, str):
+        if key in {"order_evidence", "recovery_report", "alert_summary", "stream_summary"} and not isinstance(value, str):
             updates[key] = json.dumps(value or {}, ensure_ascii=False)
+        elif key == "real_cycle_counted":
+            updates[key] = "true" if value else "false"
         else:
             updates[key] = value
     if updates:
@@ -7050,11 +7074,12 @@ def parse_testnet_drill_cycle(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if not row:
         return None
     item = dict(row)
-    for key in ("recovery_report", "alert_summary", "stream_summary"):
+    for key in ("order_evidence", "recovery_report", "alert_summary", "stream_summary"):
         try:
             item[key] = json.loads(item.get(key) or "{}")
         except json.JSONDecodeError:
             item[key] = {"raw": item.get(key)}
+    item["real_cycle_counted"] = str(item.get("real_cycle_counted") or "").lower() == "true"
     return item
 
 
@@ -7211,6 +7236,8 @@ def compact_testnet_drill_cycle(cycle: dict[str, Any] | None) -> dict[str, Any] 
             "status",
             "run_id",
             "order_id",
+            "order_evidence",
+            "real_cycle_counted",
             "note",
             "alert_summary",
             "stream_summary",
@@ -7332,7 +7359,8 @@ def execute_testnet_drill_cycle(reason: str = "manual", dry_run: bool = False) -
         completed_at = utc_now()
         completed_cycles = int(float(get_setting("testnet_drill_completed_cycles", "0") or 0)) + 1
         real_completed_cycles = int(float(get_setting("testnet_drill_real_completed_cycles", "0") or 0))
-        if not dry_run and completed_status == "completed":
+        real_cycle_counted = not dry_run and completed_status == "completed"
+        if real_cycle_counted:
             real_completed_cycles += 1
             set_setting("testnet_drill_real_completed_cycles", str(real_completed_cycles))
             set_setting("testnet_drill_last_real_cycle_at", completed_at)
@@ -7351,6 +7379,8 @@ def execute_testnet_drill_cycle(reason: str = "manual", dry_run: bool = False) -
             status=completed_status,
             run_id=(run or {}).get("id"),
             order_id=(order or {}).get("id"),
+            order_evidence=order_evidence or {"status": "skipped", "reason": "dry_run" if dry_run else "no_order_evidence"},
+            real_cycle_counted=real_cycle_counted,
             recovery_report=recovery_report,
             alert_summary=alert_counts,
             stream_summary=stream_summary,
@@ -7377,6 +7407,8 @@ def execute_testnet_drill_cycle(reason: str = "manual", dry_run: bool = False) -
             status="failed",
             run_id=(run or {}).get("id"),
             order_id=(order or {}).get("id"),
+            order_evidence=order_evidence or {"status": "failed", "error": message},
+            real_cycle_counted=False,
             alert_summary=alert_summary(get_alerts(limit=100, include_resolved=False)),
             stream_summary=exchange_stream_event_summary(),
             note=message,
@@ -12666,6 +12698,8 @@ def go_live_report() -> dict[str, Any]:
                 "status",
                 "run_id",
                 "order_id",
+                "order_evidence",
+                "real_cycle_counted",
                 "note",
             )
         }

@@ -73,6 +73,12 @@ def main() -> int:
         return fail(f"go-live report checklist missing {missing}")
     if (report.get("audit_chain") or {}).get("status") != "pass":
         return fail("go-live report audit chain is not passing")
+    drill = report.get("testnet_drill") or {}
+    drill_cycles = drill.get("cycles") or []
+    if drill_cycles:
+        latest_cycle = drill_cycles[0]
+        if "order_evidence" not in latest_cycle or "real_cycle_counted" not in latest_cycle:
+            return fail(f"go-live report does not expose Testnet order evidence: {latest_cycle}")
 
     export = subprocess.run(
         [sys.executable, "scripts/export_go_live_report.py"],

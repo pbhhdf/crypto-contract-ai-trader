@@ -53,6 +53,8 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
     checklist = report.get("checklist") or []
     gate = report.get("go_live_gate") or {}
     drill = report.get("testnet_drill") or {}
+    latest_real_cycle = next((cycle for cycle in drill.get("cycles") or [] if cycle.get("real_cycle_counted")), {})
+    latest_order_evidence = latest_real_cycle.get("order_evidence") or {}
     audit = report.get("audit_chain") or {}
     lines = [
         "# Go-Live Evidence Report",
@@ -75,6 +77,7 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
             "## Evidence",
             "",
             f"- Testnet drill: real `{drill.get('real_completed_cycles')}/{gate.get('min_testnet_drill_cycles')}`, dry-run `{drill.get('dry_run_completed_cycles')}`, total `{drill.get('completed_cycles')}/{drill.get('target_cycles')}`",
+            f"- Latest real Testnet evidence: cycle `{latest_real_cycle.get('id', '-')}`, order `{latest_order_evidence.get('order_id', '-')}`, status `{latest_order_evidence.get('status', '-')}`, venue `{latest_order_evidence.get('venue_status', '-')}`",
             f"- Audit chain: `{audit.get('status')}`, records `{audit.get('total_records')}`, broken `{audit.get('broken_count')}`",
             f"- OMS: `{(report.get('oms') or {}).get('reconciled_orders')}/{(report.get('oms') or {}).get('total_orders')}` reconciled",
             f"- Alert active count: `{((report.get('alerts') or {}).get('summary') or {}).get('active')}`",

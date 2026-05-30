@@ -59,6 +59,14 @@ def main() -> int:
         return fail("runner did not target dry_run counter")
     if not Path(payload.get("report_path", "")).exists():
         return fail("runner report path does not exist")
+    cycles = payload.get("cycles") or []
+    if not cycles:
+        return fail("runner report did not include cycle evidence")
+    latest_cycle = cycles[-1]
+    if "order_evidence" not in latest_cycle or "real_cycle_counted" not in latest_cycle:
+        return fail(f"runner cycle is missing evidence fields: {latest_cycle}")
+    if latest_cycle.get("real_cycle_counted") is not False:
+        return fail(f"dry-run runner must not count real Testnet evidence: {latest_cycle}")
 
     summary = {
         "ok": True,
@@ -66,6 +74,7 @@ def main() -> int:
         "attempted_cycles": payload.get("attempted_cycles"),
         "final_counter": payload.get("final_counter"),
         "target_cycles": payload.get("target_cycles"),
+        "cycle_evidence_status": (latest_cycle.get("order_evidence") or {}).get("status"),
         "blocking_gates": (payload.get("go_live_gate") or {}).get("blocking_gates") or [],
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))

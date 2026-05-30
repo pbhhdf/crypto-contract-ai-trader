@@ -93,6 +93,12 @@ def main() -> int:
             return fail("cycle alert_summary is missing")
         if not isinstance(cycle.get("stream_summary"), dict):
             return fail("cycle stream_summary is missing")
+        if not isinstance(cycle.get("order_evidence"), dict):
+            return fail("cycle order_evidence is missing")
+        if cycle.get("order_evidence", {}).get("reason") != "dry_run":
+            return fail(f"dry_run cycle should document skipped order evidence: {cycle.get('order_evidence')}")
+        if cycle.get("real_cycle_counted") is not False:
+            return fail(f"dry_run cycle must not be counted as real evidence: {cycle}")
 
         refreshed = request_json("GET", "/api/testnet-drill")
         refreshed_drill = refreshed.get("testnet_drill") or {}
@@ -107,6 +113,9 @@ def main() -> int:
             return fail(f"real cycle count cannot exceed total cycles: {refreshed_drill}")
         if refreshed_drill.get("last_real_cycle_id") == cycle.get("id"):
             return fail("dry_run cycle was incorrectly recorded as a real Binance Testnet cycle")
+        latest_cycle = (refreshed_drill.get("cycles") or [{}])[0]
+        if "order_evidence" not in latest_cycle or "real_cycle_counted" not in latest_cycle:
+            return fail(f"cycle history does not expose evidence fields: {latest_cycle}")
     except HTTPError as exc:
         return fail(f"HTTP {exc.code}: {exc.read().decode('utf-8', errors='replace')}")
     except (URLError, TimeoutError, OSError) as exc:
@@ -122,6 +131,8 @@ def main() -> int:
                 "completed_cycles": refreshed_drill.get("completed_cycles"),
                 "real_completed_cycles": refreshed_drill.get("real_completed_cycles"),
                 "dry_run_completed_cycles": refreshed_drill.get("dry_run_completed_cycles"),
+                "real_cycle_counted": cycle.get("real_cycle_counted"),
+                "order_evidence": cycle.get("order_evidence"),
             },
             ensure_ascii=False,
             indent=2,
