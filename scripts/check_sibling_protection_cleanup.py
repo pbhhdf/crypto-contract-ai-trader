@@ -141,7 +141,7 @@ def main() -> int:
         persist_parent_pair(reconcile_parent, reconcile_stop, reconcile_take)
         reconciled = server.reconcile_order(reconcile_stop)
         reconcile_attempts = reconciled.get("sibling_protection_cancel_attempts") or []
-        if reconciled.get("status") != "testnet_filled":
+        if reconciled.get("status") != "testnet_protection_filled":
             return fail("filled stop-loss child was not marked filled during reconcile", reconciled)
         if len(reconcile_attempts) != 1 or reconcile_attempts[0].get("order_id") != reconcile_take:
             return fail("reconcile did not cancel the take-profit sibling after stop-loss fill", reconciled)
@@ -161,6 +161,9 @@ def main() -> int:
                 {"processed": stream_processed, "note": stream_note},
             )
         stream_stop_order = server.get_order(stream_stop) or {}
+        stream_take_order = server.get_order(stream_take) or {}
+        if stream_take_order.get("status") != "testnet_protection_filled":
+            return fail("take-profit child was not marked protection-filled from private stream", stream_take_order)
         if stream_stop_order.get("status") != "testnet_protection_canceled":
             return fail("stop-loss sibling was not canceled after take-profit fill stream event", stream_stop_order)
         stream_cancel_ids = [call["params"].get("origClientOrderId") for call in calls if call["method"] == "DELETE"]
@@ -193,6 +196,7 @@ def main() -> int:
                     "private_stream": {
                         "processed": stream_processed,
                         "note": stream_note,
+                        "filled_child": stream_take_order.get("status"),
                         "canceled_sibling": stream_stop_order.get("status"),
                     },
                     "zero_fill_cancel": {

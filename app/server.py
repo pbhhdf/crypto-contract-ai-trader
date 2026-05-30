@@ -277,9 +277,13 @@ RECONCILED_ORDER_STATUSES = {
     "testnet_filled",
     "testnet_canceled",
     "testnet_protection_submitted",
+    "testnet_protection_filled",
     "testnet_protection_canceled",
     "live_submitted",
+    "live_filled",
+    "live_canceled",
     "live_protection_submitted",
+    "live_protection_filled",
     "live_protection_canceled",
     "closed",
 }
@@ -4825,6 +4829,23 @@ def cancel_child_protections_for_terminal_parent(
     return attempts
 
 
+def binance_local_status_for_venue_status(
+    mode: str,
+    venue_status: str,
+    is_protection: bool = False,
+) -> str:
+    prefix = "live" if mode == "live_guarded" else "testnet"
+    family = f"{prefix}_protection" if is_protection else prefix
+    status = str(venue_status or "UNKNOWN").upper()
+    return {
+        "FILLED": f"{family}_filled",
+        "CANCELED": f"{family}_canceled",
+        "EXPIRED": f"{family}_canceled",
+        "EXPIRED_IN_MATCH": f"{family}_canceled",
+        "REJECTED": f"{family}_canceled",
+    }.get(status, f"{family}_submitted")
+
+
 def cancel_sibling_protections_for_filled_child(
     child_order: dict[str, Any],
     mode: str,
@@ -5090,13 +5111,11 @@ def reconcile_order(order_id: str) -> dict[str, Any]:
             venue_status = str(response.get("status") or "UNKNOWN").upper()
             venue_order_id = str(response.get("orderId") or order.get("venue_order_id") or "")
             terminal = venue_status in {"FILLED", "CANCELED", "EXPIRED", "REJECTED"}
-            prefix = "live" if live_order else "testnet"
-            new_status = {
-                "FILLED": f"{prefix}_filled",
-                "CANCELED": f"{prefix}_canceled",
-                "EXPIRED": f"{prefix}_canceled",
-                "REJECTED": f"{prefix}_canceled",
-            }.get(venue_status, f"{prefix}_submitted")
+            new_status = binance_local_status_for_venue_status(
+                order_mode,
+                venue_status,
+                is_protection=bool(order.get("parent_order_id")),
+            )
             updated = update_order_state(
                 order_id,
                 status=new_status,
@@ -6010,11 +6029,13 @@ def zh_status(status: str | None) -> str:
         "testnet_validated": "测试网已验证",
         "testnet_submitted": "测试网已提交",
         "testnet_protection_submitted": "测试网保护单已提交",
+        "testnet_protection_filled": "测试网保护单已成交",
         "testnet_protection_canceled": "测试网保护单已取消",
         "testnet_filled": "测试网已成交",
         "testnet_canceled": "测试网已取消",
         "live_submitted": "实盘已提交",
         "live_protection_submitted": "实盘保护单已提交",
+        "live_protection_filled": "实盘保护单已成交",
         "live_protection_canceled": "实盘保护单已取消",
         "live_filled": "实盘已成交",
         "live_canceled": "实盘已取消",
@@ -10639,16 +10660,12 @@ def exchange_stream_event_summary() -> dict[str, Any]:
     }
 
 
-def status_from_private_order_event(mode: str, venue_status: str) -> str:
-    prefix = "live" if mode == "live_guarded" else "testnet"
-    status = str(venue_status or "UNKNOWN").upper()
-    return {
-        "FILLED": f"{prefix}_filled",
-        "CANCELED": f"{prefix}_canceled",
-        "EXPIRED": f"{prefix}_canceled",
-        "EXPIRED_IN_MATCH": f"{prefix}_canceled",
-        "REJECTED": f"{prefix}_canceled",
-    }.get(status, f"{prefix}_submitted")
+def status_from_private_order_event(
+    mode: str,
+    venue_status: str,
+    is_protection: bool = False,
+) -> str:
+    return binance_local_status_for_venue_status(mode, venue_status, is_protection=is_protection)
 
 
 def handle_private_order_update(mode: str, event: dict[str, Any]) -> tuple[bool, str]:
@@ -10664,7 +10681,11 @@ def handle_private_order_update(mode: str, event: dict[str, Any]) -> tuple[bool,
     terminal = venue_status in {"FILLED", "CANCELED", "EXPIRED", "EXPIRED_IN_MATCH", "REJECTED"}
     updated = update_order_state(
         local_order["id"],
-        status=status_from_private_order_event(mode, venue_status),
+        status=status_from_private_order_event(
+            mode,
+            venue_status,
+            is_protection=bool(local_order.get("parent_order_id")),
+        ),
         venue_order_id=venue_order_id or None,
         venue_status=venue_status,
         reconcile_status="reconciled" if terminal else "needs_reconcile",
