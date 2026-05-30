@@ -229,6 +229,7 @@ def main() -> int:
                 "scripts/check_alert_delivery.py",
                 "scripts/check_alert_watchdog.py",
                 "scripts/check_testnet_drill.py",
+                "scripts/check_testnet_drill_order_evidence.py",
                 "scripts/check_testnet_drill_runner.py",
                 "scripts/check_exchange_recovery.py",
                 "scripts/check_exchange_emergency.py",
@@ -325,6 +326,7 @@ def main() -> int:
         steps.append(run_server_step("alert_delivery", [PYTHON, "scripts/check_alert_delivery.py"], timeout=60))
         steps.append(run_server_step("alert_watchdog", [PYTHON, "scripts/check_alert_watchdog.py"], timeout=120))
         steps.append(run_server_step("testnet_drill", [PYTHON, "scripts/check_testnet_drill.py"], timeout=120))
+        steps.append(run_step("testnet_drill_order_evidence", [PYTHON, "scripts/check_testnet_drill_order_evidence.py"], timeout=30))
         steps.append(run_server_step("testnet_drill_runner", [PYTHON, "scripts/check_testnet_drill_runner.py"], timeout=150))
         steps.append(run_server_step("exchange_recovery", [PYTHON, "scripts/check_exchange_recovery.py"], timeout=120))
         steps.append(run_server_step("exchange_emergency", [PYTHON, "scripts/check_exchange_emergency.py"], timeout=120))

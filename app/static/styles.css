@@ -2337,3 +2337,252 @@ th {
     grid-column: auto;
   }
 }
+
+/* Compact trading desk refresh. Keep the page short by turning the UI into a
+   fixed desktop workbench with an internal content rail. */
+@media (min-width: 860px) {
+  body {
+    height: 100vh;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(245, 248, 252, 0.98), rgba(237, 243, 249, 0.9) 230px),
+      linear-gradient(120deg, rgba(14, 122, 85, 0.06), rgba(155, 98, 8, 0.05)),
+      #edf3f8;
+  }
+
+  .topbar {
+    min-height: 48px;
+    padding: 6px 18px;
+    background: linear-gradient(90deg, #0f172a, #142033 48%, #10281f);
+  }
+
+  .eyebrow {
+    margin-bottom: 2px;
+    font-size: 10px;
+  }
+
+  h1 {
+    font-size: 16px;
+  }
+
+  .shell {
+    width: calc(100% - 16px);
+    height: calc(100vh - 60px);
+    margin: 6px auto;
+    display: grid;
+    grid-template-columns: 124px minmax(0, 1fr);
+    grid-template-areas:
+      "nav controls"
+      "nav stage";
+    gap: 8px;
+    align-items: start;
+  }
+
+  .control-band {
+    grid-area: controls;
+    margin: 0;
+    padding: 8px;
+    grid-template-columns: minmax(146px, 0.82fr) minmax(168px, 0.9fr) minmax(320px, 2.1fr);
+    align-items: end;
+    border-radius: 7px;
+    border-color: #cfd9e8;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 6px 18px rgba(17, 24, 39, 0.055);
+  }
+
+  .control-group label {
+    margin-bottom: 5px;
+    font-size: 11px;
+    color: #536074;
+  }
+
+  select,
+  input,
+  textarea {
+    border-radius: 6px;
+  }
+
+  .control-actions {
+    grid-template-columns: repeat(4, minmax(82px, 1fr));
+    gap: 7px;
+  }
+
+  button {
+    min-height: 32px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .view-switcher {
+    position: sticky;
+    top: 6px;
+    grid-area: nav;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-self: stretch;
+    min-height: calc(100vh - 72px);
+    max-height: calc(100vh - 72px);
+    margin: 0;
+    padding: 7px;
+    overflow: auto;
+    border-color: rgba(15, 23, 42, 0.96);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #111827, #111f33 58%, #10251f);
+    box-shadow: 0 10px 24px rgba(17, 24, 39, 0.16);
+  }
+
+  .view-tab {
+    width: 100%;
+    min-height: 34px;
+    justify-content: flex-start;
+    padding: 0 9px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cdd7e6;
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .view-tab::before {
+    width: 7px;
+    height: 7px;
+    flex-basis: 7px;
+  }
+
+  .view-tab.active {
+    color: #101828;
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  }
+
+  .view-stage {
+    grid-area: stage;
+    max-height: calc(100vh - 126px);
+    margin-top: 0;
+    padding: 0 2px 2px 0;
+    overflow: auto;
+    align-content: start;
+  }
+
+  body[data-active-view="overview"] .view-stage {
+    max-height: calc(100vh - 126px);
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    gap: 8px;
+  }
+
+  .view-section.panel,
+  .view-section.workspace {
+    max-height: calc(100vh - 126px);
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .overview-grid,
+  .account-grid,
+  .metrics-grid,
+  .system-grid {
+    gap: 8px;
+  }
+
+  body[data-active-view="overview"] .overview-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body[data-active-view="overview"] .account-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  body[data-active-view="overview"] .metrics-grid,
+  body[data-active-view="overview"] .system-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview-card,
+  .system-card,
+  .metric,
+  .panel {
+    border-radius: 7px;
+    border-color: #d6e0ed;
+    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.045);
+  }
+
+  .overview-card,
+  .system-card,
+  .metric {
+    min-height: 76px;
+    padding: 11px 12px;
+    background: linear-gradient(180deg, #fff, #f9fbfe);
+  }
+
+  .overview-card strong,
+  .system-card strong,
+  .metric strong {
+    font-size: 19px;
+    line-height: 1.15;
+  }
+
+  .overview-card small,
+  .system-card small,
+  .metric small {
+    line-height: 1.35;
+  }
+
+  .panel {
+    padding: 13px;
+  }
+
+  .panel-heading {
+    min-height: 30px;
+    padding-bottom: 8px;
+    margin-bottom: 9px;
+    border-bottom: 1px solid #e3e9f2;
+  }
+
+  .panel-heading h2 {
+    font-size: 15px;
+  }
+
+  .table-wrap {
+    border-radius: 7px;
+  }
+
+  th,
+  td {
+    padding: 8px 9px;
+  }
+}
+
+@media (min-width: 860px) and (max-width: 1039px) {
+  .shell {
+    grid-template-columns: 116px minmax(0, 1fr);
+  }
+
+  .view-tab {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .control-band {
+    grid-template-columns: minmax(132px, 0.8fr) minmax(150px, 0.88fr) minmax(290px, 1.9fr);
+  }
+
+  body[data-active-view="overview"] .overview-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body[data-active-view="overview"] .account-grid,
+  body[data-active-view="overview"] .metrics-grid,
+  body[data-active-view="overview"] .system-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body[data-active-view="overview"] .metrics-grid,
+  body[data-active-view="overview"] .system-grid {
+    align-self: stretch;
+  }
+
+  .overview-card,
+  .system-card,
+  .metric {
+    min-height: 74px;
+  }
+}

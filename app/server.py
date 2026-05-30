@@ -7110,6 +7110,56 @@ def cancel_open_testnet_orders_for_run(run_id: str) -> list[dict[str, Any]]:
     return canceled
 
 
+def validate_testnet_drill_order_evidence(
+    mode: str,
+    run: dict[str, Any] | None,
+    order: dict[str, Any] | None,
+    canceled_orders: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    normalized = str(mode or "").lower().strip()
+    run_status = str((run or {}).get("status") or "").lower().strip()
+    order_status = str((order or {}).get("status") or "").lower().strip()
+    venue_status = str((order or {}).get("venue_status") or "").upper().strip()
+    canceled = canceled_orders or []
+    if run_status != "completed":
+        raise RuntimeError(f"Testnet drill run must complete before counting evidence; status={run_status or '-'}.")
+    if not order:
+        raise RuntimeError("Testnet drill produced no order evidence; real cycle cannot be counted.")
+    if normalized == "binance_testnet_validate":
+        if order_status != "testnet_validated" or venue_status != "ORDER_TEST_ACCEPTED":
+            raise RuntimeError(
+                "Testnet validation drill requires an ORDER_TEST_ACCEPTED test order; "
+                f"status={order_status or '-'}, venue_status={venue_status or '-'}."
+            )
+    elif normalized == "binance_testnet_place_order":
+        if not order_status.startswith("testnet_"):
+            raise RuntimeError(f"Testnet placement drill order has unexpected status={order_status or '-'}.")
+        if not canceled:
+            raise RuntimeError("Testnet placement drill did not cancel or terminally clean up any submitted order.")
+        unresolved = [
+            item
+            for item in canceled
+            if str(item.get("reconcile_status") or "").lower().strip() not in {"reconciled", "validated_no_live_order"}
+        ]
+        if unresolved:
+            raise RuntimeError(
+                "Testnet placement drill cleanup left unresolved orders: "
+                + ", ".join(str(item.get("id") or item.get("client_order_id") or "-") for item in unresolved[:5])
+            )
+    else:
+        raise RuntimeError(f"Unsupported Testnet drill evidence mode: {normalized or '-'}.")
+    return {
+        "status": "pass",
+        "mode": normalized,
+        "run_id": (run or {}).get("id"),
+        "run_status": run_status,
+        "order_id": (order or {}).get("id"),
+        "order_status": order_status,
+        "venue_status": venue_status,
+        "canceled_order_ids": [item.get("id") for item in canceled],
+    }
+
+
 def testnet_drill_status() -> dict[str, Any]:
     completed = int(float(get_setting("testnet_drill_completed_cycles", "0") or 0))
     real_completed = int(float(get_setting("testnet_drill_real_completed_cycles", "0") or 0))
@@ -7243,6 +7293,8 @@ def execute_testnet_drill_cycle(reason: str = "manual", dry_run: bool = False) -
     cycle_id = cycle["id"]
     run: dict[str, Any] | None = None
     order: dict[str, Any] | None = None
+    canceled: list[dict[str, Any]] = []
+    order_evidence: dict[str, Any] | None = None
     note = ""
     try:
         if dry_run:
@@ -7258,8 +7310,19 @@ def execute_testnet_drill_cycle(reason: str = "manual", dry_run: bool = False) -
                 if canceled:
                     order = canceled[0]
                     note = f"submitted testnet orders were canceled after drill: {', '.join(item['id'] for item in canceled)}."
-            if run.get("status") != "completed":
-                raise RuntimeError(f"Drill run ended with status={run.get('status')}.")
+            order_evidence = validate_testnet_drill_order_evidence(status["mode"], run, order, canceled)
+            note = "; ".join(
+                item
+                for item in [
+                    note,
+                    (
+                        "order evidence "
+                        f"{order_evidence['order_id']} / {order_evidence['order_status']} / "
+                        f"venue={order_evidence['venue_status'] or '-'}"
+                    ),
+                ]
+                if item
+            )
         recovery_report = recover_exchange_state(trigger=f"testnet_drill:{cycle_id}")
         resolve_alert("testnet_drill.last_error", "Testnet drill cycle reached recovery checks.")
         alert_state = run_watchdog_checks()
@@ -7302,7 +7365,7 @@ def execute_testnet_drill_cycle(reason: str = "manual", dry_run: bool = False) -
             "Testnet Drill",
             "Binance Testnet drill cycle completed",
             f"Cycle {cycle_id} finished with status {completed_status}; mode={mode_label(status['mode'])}.",
-            {"cycle": update, "run": run, "order": order},
+            {"cycle": update, "run": run, "order": order, "order_evidence": order_evidence},
         )
         return update
     except Exception as exc:
