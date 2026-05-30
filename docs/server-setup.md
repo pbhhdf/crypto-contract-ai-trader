@@ -89,6 +89,7 @@ AI_OPERATOR_BACKUP_BEFORE_SHELL=true
 AI_OPERATOR_SHELL_BACKUP_DIR=reports/ai_operator_backups
 AI_OPERATOR_SHELL_BACKUP_TIMEOUT_SECONDS=45
 MAX_ORDER_NOTIONAL_USDT=1000
+MIN_PROTECTION_REWARD_RISK_RATIO=1.0
 EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS=30
 LIVE_ARMING_MAX_ORDERS=1
 LIVE_ATTESTATION_MAX_AGE_DAYS=30
@@ -162,6 +163,9 @@ server Shell access is enabled.
 Keep `MAX_ORDER_NOTIONAL_USDT` low during the first live pilot. It is an
 absolute per-order notional cap layered on top of percentage sizing and leverage
 limits.
+`MIN_PROTECTION_REWARD_RISK_RATIO=1.0` requires stop-loss / take-profit geometry
+to offer at least as much reward distance as risk distance before OMS validation
+or Binance protective orders can proceed.
 `EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS=30` requires Binance testnet/live
 orders to be sized from a just-synced exchange account snapshot.
 `LIVE_ARMING_MAX_ORDERS=1` makes each live arming a one-entry-order budget;

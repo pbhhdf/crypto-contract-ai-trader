@@ -71,8 +71,10 @@ def main() -> int:
             return fail("entry test did not use the parent client order id", client_ids)
         if not client_ids[1].endswith("-SL") or not client_ids[2].endswith("-TP"):
             return fail("protection tests did not use SL/TP child client order ids", client_ids)
-        if set(bundle.keys()) != {"mode", "entry", "protections"} or len(bundle["protections"]) != 2:
+        if set(bundle.keys()) != {"mode", "entry", "protection_geometry", "protections"} or len(bundle["protections"]) != 2:
             return fail("validation bundle has unexpected structure", bundle)
+        if bundle["protection_geometry"].get("status") != "pass":
+            return fail("validation bundle did not include passing protection geometry", bundle)
 
         print(
             json.dumps(

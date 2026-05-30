@@ -351,6 +351,7 @@ def live_checks(env: dict[str, str]) -> list[dict[str, Any]]:
     confirmation = clean(env.get("LIVE_TRADING_CONFIRMATION", "")) == "I_UNDERSTAND_LIVE_RISK"
     alerts_ok, channels = alert_ready(env)
     max_notional = number_value(env, "MAX_ORDER_NOTIONAL_USDT", -1.0)
+    min_reward_risk = number_value(env, "MIN_PROTECTION_REWARD_RISK_RATIO", -1.0)
     wallet_cap = number_value(env, "LIVE_PILOT_MAX_WALLET_USDT", -1.0)
     drill_cycles = int(number_value(env, "GO_LIVE_MIN_TESTNET_DRILL_CYCLES", 0))
     max_time_drift = int(number_value(env, "BINANCE_MAX_TIME_DRIFT_MS", 0))
@@ -384,11 +385,11 @@ def live_checks(env: dict[str, str]) -> list[dict[str, Any]]:
             stage,
             "live_pilot_caps",
             "小额试运行资金上限",
-            "pass" if max_notional > 0 and wallet_cap > 0 else "fail",
-            f"单笔名义上限 {max_notional:g} USDT，钱包试运行上限 {wallet_cap:g} USDT。"
-            if max_notional > 0 and wallet_cap > 0
-            else "实盘必须设置 MAX_ORDER_NOTIONAL_USDT 和 LIVE_PILOT_MAX_WALLET_USDT 为正数。",
-            ["MAX_ORDER_NOTIONAL_USDT", "LIVE_PILOT_MAX_WALLET_USDT"],
+            "pass" if max_notional > 0 and wallet_cap > 0 and min_reward_risk >= 1 else "fail",
+            f"单笔名义上限 {max_notional:g} USDT，钱包试运行上限 {wallet_cap:g} USDT，最小保护单盈亏比 {min_reward_risk:g}。"
+            if max_notional > 0 and wallet_cap > 0 and min_reward_risk >= 1
+            else "实盘必须设置 MAX_ORDER_NOTIONAL_USDT 和 LIVE_PILOT_MAX_WALLET_USDT 为正数，且 MIN_PROTECTION_REWARD_RISK_RATIO 至少为 1。",
+            ["MAX_ORDER_NOTIONAL_USDT", "LIVE_PILOT_MAX_WALLET_USDT", "MIN_PROTECTION_REWARD_RISK_RATIO"],
         ),
         check_item(
             stage,
@@ -480,6 +481,7 @@ def build_live_env_profile(
         "BINANCE_PLACE_LIVE_ORDERS",
         "LIVE_TRADING_CONFIRMATION",
         "MAX_ORDER_NOTIONAL_USDT",
+        "MIN_PROTECTION_REWARD_RISK_RATIO",
         "LIVE_PILOT_MAX_WALLET_USDT",
         "GO_LIVE_MIN_TESTNET_DRILL_CYCLES",
         "BINANCE_TARGET_MARGIN_TYPE",

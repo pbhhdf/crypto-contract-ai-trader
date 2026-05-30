@@ -527,6 +527,9 @@ Server safety defaults:
   Telegram, or SMTP email alert delivery is configured.
 - `MAX_ORDER_NOTIONAL_USDT=1000` adds an absolute per-order notional cap on top
   of percentage sizing and leverage limits; keep it low for first live pilots.
+- `MIN_PROTECTION_REWARD_RISK_RATIO=1.0` rejects directional orders whose
+  stop-loss / take-profit geometry offers less reward distance than risk
+  distance before OMS validation or Binance protection orders are built.
 - `EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS=30` forces Binance testnet/live
   orders to use a fresh account snapshot for sizing and margin checks.
 - `LIVE_ATTESTATION_MAX_AGE_DAYS=30` expires the manual live evidence record;

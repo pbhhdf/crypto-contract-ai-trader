@@ -6,6 +6,7 @@ import importlib.util
 import json
 import hashlib
 import hmac
+import math
 import os
 import random
 import re
@@ -173,6 +174,7 @@ MAX_ORDER_NOTIONAL_USDT = float(os.getenv("MAX_ORDER_NOTIONAL_USDT", "1000"))
 MAX_DAILY_LOSS_PCT = float(os.getenv("MAX_DAILY_LOSS_PCT", "0.03"))
 MAX_CONSECUTIVE_LOSSES = int(float(os.getenv("MAX_CONSECUTIVE_LOSSES", "3")))
 MAX_OPEN_POSITIONS = int(float(os.getenv("MAX_OPEN_POSITIONS", "8")))
+MIN_PROTECTION_REWARD_RISK_RATIO = env_float("MIN_PROTECTION_REWARD_RISK_RATIO", 1.0, 0.0, 100.0)
 ALLOWED_SYMBOLS = os.getenv("ALLOWED_SYMBOLS", "BTCUSDT,ETHUSDT,SOLUSDT")
 ACCOUNT_EQUITY_USDT = float(os.getenv("ACCOUNT_EQUITY_USDT", "10000"))
 APP_BASIC_AUTH_USER = os.getenv("APP_BASIC_AUTH_USER", "").strip()
@@ -8999,6 +9001,7 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
     account_freshness = execution_account_freshness(mode, account_state)
     market_freshness = execution_market_freshness(mode, snapshot)
     order_conflicts = [] if intent["side"] == "HOLD" else stateful_order_conflicts(mode, intent["symbol"])
+    protection_check = protection_geometry(intent)
     equity_base = float(account_state.get("equity_usdt") or ACCOUNT_EQUITY_USDT)
     daily_realized = today_realized_pnl()
     daily_loss_limit = equity_base * config["max_daily_loss_pct"]
@@ -9116,6 +9119,15 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
             "detail": "所有方向性订单都必须带止损。",
         },
         {
+            "name": "Protection geometry",
+            "status": "pass" if intent["side"] == "HOLD" or protection_check["status"] == "pass" else "fail",
+            "detail": (
+                "观望动作不需要保护单。"
+                if intent["side"] == "HOLD"
+                else protection_check["detail"]
+            ),
+        },
+        {
             "name": "Liquidation pressure",
             "status": "pass" if snapshot["liquidation_pressure"] != "high" else "warn",
             "detail": f"当前清算压力：{source_label(snapshot['liquidation_pressure'])}。",
@@ -9130,6 +9142,7 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
         "account": account_state,
         "market": snapshot,
         "market_freshness": market_freshness,
+        "protection_geometry": protection_check,
         "order_conflicts": order_conflicts,
     }
 
@@ -9421,11 +9434,96 @@ def normalize_binance_stop_price(symbol: str, stop_price: float, mode: str) -> t
     }
 
 
+def protection_geometry(order: dict[str, Any]) -> dict[str, Any]:
+    side = str(order.get("side") or "").upper()
+    symbol = str(order.get("symbol") or "")
+    failures: list[str] = []
+    if side == "HOLD":
+        return {
+            "status": "skipped",
+            "symbol": symbol,
+            "side": side,
+            "detail": "HOLD intent does not create entry or protection orders.",
+            "failures": [],
+            "minimum_reward_risk_ratio": MIN_PROTECTION_REWARD_RISK_RATIO,
+        }
+    if side not in {"BUY", "SELL"}:
+        failures.append(f"side must be BUY or SELL for a protected order, got {side or '-'}")
+
+    try:
+        entry = float(order.get("entry_price"))
+        stop = float(order.get("stop_loss"))
+        take = float(order.get("take_profit"))
+    except (TypeError, ValueError):
+        entry = stop = take = 0.0
+        failures.append("entry_price, stop_loss, and take_profit must be numeric")
+
+    for name, value in (("entry_price", entry), ("stop_loss", stop), ("take_profit", take)):
+        if not math.isfinite(value) or value <= 0:
+            failures.append(f"{name} must be a positive finite number")
+
+    if not failures:
+        if side == "BUY":
+            if not (stop < entry < take):
+                failures.append("BUY protection must satisfy stop_loss < entry_price < take_profit")
+            risk_distance = entry - stop
+            reward_distance = take - entry
+        else:
+            if not (take < entry < stop):
+                failures.append("SELL protection must satisfy take_profit < entry_price < stop_loss")
+            risk_distance = stop - entry
+            reward_distance = entry - take
+        if risk_distance <= 0:
+            failures.append("risk distance must be greater than zero")
+        reward_risk_ratio = reward_distance / risk_distance if risk_distance > 0 else 0.0
+        if MIN_PROTECTION_REWARD_RISK_RATIO > 0 and reward_risk_ratio < MIN_PROTECTION_REWARD_RISK_RATIO:
+            failures.append(
+                "reward/risk ratio "
+                f"{reward_risk_ratio:.4f} is below minimum {MIN_PROTECTION_REWARD_RISK_RATIO:.4f}"
+            )
+    else:
+        risk_distance = 0.0
+        reward_distance = 0.0
+        reward_risk_ratio = 0.0
+
+    status = "fail" if failures else "pass"
+    return {
+        "status": status,
+        "symbol": symbol,
+        "side": side,
+        "entry_price": entry,
+        "stop_loss": stop,
+        "take_profit": take,
+        "risk_distance": round(risk_distance, 8),
+        "reward_distance": round(reward_distance, 8),
+        "risk_distance_pct": round((risk_distance / entry) * 100, 6) if entry > 0 else 0.0,
+        "reward_distance_pct": round((reward_distance / entry) * 100, 6) if entry > 0 else 0.0,
+        "reward_risk_ratio": round(reward_risk_ratio, 6),
+        "minimum_reward_risk_ratio": MIN_PROTECTION_REWARD_RISK_RATIO,
+        "detail": (
+            "保护单几何关系通过。"
+            if status == "pass"
+            else "；".join(failures)
+        ),
+        "failures": failures,
+    }
+
+
+def assert_valid_protection_geometry(order: dict[str, Any]) -> dict[str, Any]:
+    geometry = protection_geometry(order)
+    if geometry.get("status") != "pass":
+        failures = geometry.get("failures") or [geometry.get("detail") or "unknown protection geometry failure"]
+        raise ValueError("Protection geometry check failed: " + "; ".join(str(item) for item in failures))
+    return geometry
+
+
 def binance_protection_order_params(
     order: dict[str, Any],
     protection_kind: str,
     mode: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    geometry = assert_valid_protection_geometry(order)
+    order["protection_geometry"] = geometry
     clean_kind = "stop_loss" if protection_kind == "stop_loss" else "take_profit"
     stop_price = order["stop_loss"] if clean_kind == "stop_loss" else order["take_profit"]
     normalized_stop, evidence = normalize_binance_stop_price(order["symbol"], float(stop_price), mode)
@@ -9450,6 +9548,7 @@ def binance_protection_order_params(
         "order_type": order_type,
         "side": params["side"],
         "close_position": True,
+        "protection_geometry": geometry,
     }
     return params, evidence
 
@@ -9522,11 +9621,13 @@ def validate_binance_order_bundle(
     mode: str,
     record_transition: bool = False,
 ) -> dict[str, Any]:
+    order["protection_geometry"] = assert_valid_protection_geometry(order)
     entry_response = signed_binance_request_for_mode("POST", "/fapi/v1/order/test", entry_params, mode)
     protection_validation = validate_binance_protection_orders(order, mode, record_transition=record_transition)
     return {
         "mode": mode,
         "entry": {"params": entry_params, "response": entry_response},
+        "protection_geometry": order["protection_geometry"],
         "protections": protection_validation,
     }
 
@@ -10423,6 +10524,7 @@ def prepare_order_payload(
         "updated_at": now,
         "parent_order_id": None,
         "protection_kind": None,
+        "protection_geometry": protection_geometry(intent),
         "sizing": {
             "equity_usdt": round(sizing_equity, 2),
             "position_pct": intent["position_pct"],
@@ -10478,6 +10580,7 @@ def persist_order(order: dict[str, Any]) -> dict[str, Any]:
             "pre_submit_validation": order.get("pre_submit_validation"),
             "market_freshness": order.get("market_freshness"),
             "order_conflict_check": order.get("order_conflict_check"),
+            "protection_geometry": order.get("protection_geometry"),
         },
     )
     return order
@@ -11427,6 +11530,7 @@ def live_env_profile_runtime_env() -> dict[str, str]:
             "BINANCE_PLACE_LIVE_ORDERS": str(BINANCE_PLACE_LIVE_ORDERS).lower(),
             "LIVE_TRADING_CONFIRMATION": LIVE_TRADING_CONFIRMATION,
             "MAX_ORDER_NOTIONAL_USDT": str(MAX_ORDER_NOTIONAL_USDT),
+            "MIN_PROTECTION_REWARD_RISK_RATIO": str(MIN_PROTECTION_REWARD_RISK_RATIO),
             "LIVE_PILOT_MAX_WALLET_USDT": str(LIVE_PILOT_MAX_WALLET_USDT),
             "GO_LIVE_MIN_TESTNET_DRILL_CYCLES": str(GO_LIVE_MIN_TESTNET_DRILL_CYCLES),
             "GO_LIVE_MIN_WALKFORWARD_FOLDS": str(GO_LIVE_MIN_WALKFORWARD_FOLDS),

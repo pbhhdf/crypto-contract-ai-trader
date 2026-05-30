@@ -139,6 +139,10 @@ def main() -> int:
     except ValueError:
         max_order_notional = -1.0
     try:
+        min_protection_reward_risk = float(os.getenv("MIN_PROTECTION_REWARD_RISK_RATIO", "1.0"))
+    except ValueError:
+        min_protection_reward_risk = -1.0
+    try:
         live_pilot_max_wallet = float(os.getenv("LIVE_PILOT_MAX_WALLET_USDT", "5000"))
     except ValueError:
         live_pilot_max_wallet = -1.0
@@ -172,6 +176,8 @@ def main() -> int:
         walkforward_max_drawdown = -1.0
     if max_order_notional < 0:
         errors.append("MAX_ORDER_NOTIONAL_USDT must be a non-negative number.")
+    if not (0 <= min_protection_reward_risk <= 100):
+        errors.append("MIN_PROTECTION_REWARD_RISK_RATIO must be between 0 and 100.")
     if live_pilot_max_wallet < 0:
         errors.append("LIVE_PILOT_MAX_WALLET_USDT must be a non-negative number.")
     if account_snapshot_max_age < 1:

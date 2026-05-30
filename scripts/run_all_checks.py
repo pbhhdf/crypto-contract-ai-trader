@@ -209,6 +209,7 @@ def main() -> int:
                 "scripts/check_guarded_live_pilot_runner.py",
                 "scripts/check_live_protection_guard.py",
                 "scripts/check_pre_submit_order_tests.py",
+                "scripts/check_protection_geometry.py",
                 "scripts/check_execution_market_freshness.py",
                 "scripts/check_stateful_order_conflict.py",
                 "scripts/check_parent_cancel_cascade.py",
@@ -273,6 +274,7 @@ def main() -> int:
     steps.append(run_step("live_ops_handoff", [PYTHON, "scripts/check_live_ops_handoff.py"], timeout=30))
     steps.append(run_step("live_protection_guard", [PYTHON, "scripts/check_live_protection_guard.py"], timeout=60))
     steps.append(run_step("pre_submit_order_tests", [PYTHON, "scripts/check_pre_submit_order_tests.py"], timeout=30))
+    steps.append(run_step("protection_geometry", [PYTHON, "scripts/check_protection_geometry.py"], timeout=30))
     steps.append(run_step("execution_market_freshness", [PYTHON, "scripts/check_execution_market_freshness.py"], timeout=30))
     steps.append(run_step("stateful_order_conflict", [PYTHON, "scripts/check_stateful_order_conflict.py"], timeout=30))
     steps.append(run_step("parent_cancel_cascade", [PYTHON, "scripts/check_parent_cancel_cascade.py"], timeout=60))
