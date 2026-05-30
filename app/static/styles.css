@@ -490,6 +490,62 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   margin-top: 16px;
 }
 
+body[data-active-view="research"] .architecture-panel {
+  overflow-x: hidden;
+}
+
+.architecture-detail-group {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.research-detail-group {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.architecture-detail-group summary {
+  min-height: 42px;
+  padding: 11px 12px;
+  cursor: pointer;
+  color: #243247;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.research-detail-group summary {
+  min-height: 40px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #243247;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.architecture-detail-group[open] {
+  padding: 0 12px 12px;
+}
+
+.research-detail-group[open] {
+  padding: 0 12px 12px;
+}
+
+.architecture-detail-group[open] summary {
+  margin: 0 -12px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #f6f9fd;
+}
+
+.research-detail-group[open] summary {
+  margin: 0 -12px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #f6f9fd;
+}
+
 .scheduler-panel {
   margin-top: 16px;
 }
@@ -792,7 +848,7 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 .oms-facts,
 .recovery-facts {
   display: grid;
-  grid-template-columns: 1fr 1fr 2fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
   gap: 12px;
   margin-top: 14px;
 }
@@ -803,6 +859,19 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 
 .testnet-drill-facts {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body[data-active-view="ops"] .testnet-drill-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body[data-active-view="ops"] #testnet-drill-cycles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body[data-active-view="ops"] #testnet-drill-cycles article {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .live-gate-facts {
@@ -1023,6 +1092,13 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   line-height: 1.52;
 }
 
+body[data-active-view="research"] .executive-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
 .executive-card span {
   color: var(--muted);
   font-size: 12px;
@@ -1056,6 +1132,22 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 
 .architecture-table-wrap {
   margin-top: 12px;
+}
+
+body[data-active-view="research"] .tooling-list,
+body[data-active-view="research"] .guardrail-list {
+  max-height: 260px;
+  overflow: auto;
+}
+
+body[data-active-view="research"] .table-wrap {
+  max-height: 320px;
+  overflow: auto;
+}
+
+body[data-active-view="research"] .event-body,
+body[data-active-view="research"] .muted-text {
+  overflow-wrap: anywhere;
 }
 
 .implementation-notes-wrap {
@@ -1214,6 +1306,17 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   margin: 0;
   color: #344054;
   line-height: 1.5;
+}
+
+.entity-card,
+.ui-nav-card,
+.flow-step,
+.guidance-card {
+  overflow-wrap: anywhere;
+}
+
+body[data-active-view="evidence"] #audit-chain-recent {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .ui-nav-card ul,

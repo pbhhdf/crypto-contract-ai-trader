@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard6" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard7" />
   </head>
   <body>
     <header class="topbar">
@@ -668,8 +668,14 @@
         </div>
         <p id="research-summary" class="event-body"></p>
         <div id="research-protocol" class="research-protocol"></div>
+        <details class="research-detail-group">
+          <summary>研究工件详情</summary>
         <div id="research-artifacts" class="research-grid"></div>
+        </details>
+        <details class="research-detail-group">
+          <summary>治理边界与防护规则</summary>
         <div id="research-guardrails" class="guardrail-list"></div>
+        </details>
       </section>
 
       <section class="panel architecture-panel">
@@ -679,6 +685,8 @@
         </div>
         <p id="architecture-summary" class="event-body"></p>
         <div id="executive-summary" class="executive-summary-grid"></div>
+        <details class="architecture-detail-group">
+          <summary>项目边界与合规假设</summary>
         <div class="subsection-heading">
           <h3>项目目标与假设</h3>
           <span>默认约束</span>
@@ -705,6 +713,9 @@
         </div>
         <div id="compliance-tiers" class="guidance-grid"></div>
         <div id="exchange-selection" class="guidance-grid"></div>
+        </details>
+        <details class="architecture-detail-group">
+          <summary>参考项目吸收</summary>
         <div class="subsection-heading">
           <h3>参考项目拆解</h3>
           <span>代理边界</span>
@@ -753,6 +764,9 @@
         <div id="reference-architecture-paths" class="guidance-grid"></div>
         <div id="reference-absorb-points" class="guidance-grid"></div>
         <div id="reference-implementation-rule" class="tooling-list"></div>
+        </details>
+        <details class="architecture-detail-group">
+          <summary>目标分层架构</summary>
         <div class="subsection-heading compact">
           <h3>推荐分层架构</h3>
           <span>四平面目标图</span>
@@ -789,6 +803,9 @@
             <tbody id="architecture-components"></tbody>
           </table>
         </div>
+        </details>
+        <details class="architecture-detail-group">
+          <summary>模块与实现注意事项</summary>
         <div class="subsection-heading compact">
           <h3>关键模块定义</h3>
           <span>职责与生产化要点</span>
@@ -839,6 +856,9 @@
             <tbody id="implementation-notes"></tbody>
           </table>
         </div>
+        </details>
+        <details class="architecture-detail-group">
+          <summary>数据实体与 UI 交互</summary>
         <div class="subsection-heading">
           <h3>关键数据流与实体关系</h3>
           <span>可回放链路</span>
@@ -895,6 +915,9 @@
         <div id="main-loop-steps" class="flow-steps"></div>
         <div id="responsive-guidance" class="guidance-grid"></div>
         <div id="chart-guidance" class="guidance-grid"></div>
+        </details>
+        <details class="architecture-detail-group">
+          <summary>技术路线与验收门槛</summary>
         <div class="subsection-heading">
           <h3>技术栈与实施路线</h3>
           <span>标准版路径</span>
@@ -974,6 +997,7 @@
           </table>
         </div>
         <div id="go-live-gates" class="tooling-list"></div>
+        </details>
       </section>
 
       <section class="workspace intent-workspace">
@@ -1079,6 +1103,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard6"></script>
+    <script src="/app.js?v=20260531-dashboard7"></script>
   </body>
 </html>
