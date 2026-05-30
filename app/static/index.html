@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard8" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard9" />
   </head>
   <body>
     <header class="topbar">
@@ -82,7 +82,13 @@
           <h2>部署就绪检查</h2>
           <span id="readiness-overall">检查中</span>
         </div>
+        <details class="evidence-detail-group">
+          <summary>
+            <span>检查项详情</span>
+            <small>展开查看就绪检查明细</small>
+          </summary>
         <div id="readiness-list" class="readiness-list"></div>
+        </details>
       </section>
 
       <section class="panel audit-chain-panel">
@@ -104,7 +110,13 @@
             <strong id="audit-chain-hash">-</strong>
           </article>
         </div>
+        <details class="evidence-detail-group">
+          <summary>
+            <span>最近审计记录</span>
+            <small>展开查看哈希链尾部</small>
+          </summary>
         <div id="audit-chain-recent" class="guidance-grid"></div>
+        </details>
       </section>
 
       <section class="panel alert-panel">
@@ -268,7 +280,13 @@
             <strong id="testnet-drill-error">-</strong>
           </article>
         </div>
+        <details class="ops-detail-group">
+          <summary>
+            <span>演练历史</span>
+            <small>展开查看最近循环</small>
+          </summary>
         <div id="testnet-drill-cycles" class="guidance-grid"></div>
+        </details>
       </section>
 
       <section class="panel live-gate-panel">
@@ -1031,6 +1049,11 @@
           <h2>纸交易持仓</h2>
           <span id="position-summary">暂无持仓</span>
         </div>
+        <details class="evidence-detail-group">
+          <summary>
+            <span>持仓明细</span>
+            <small>展开查看纸交易仓位</small>
+          </summary>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1053,6 +1076,7 @@
             <tbody id="positions"></tbody>
           </table>
         </div>
+        </details>
       </section>
 
       <section class="panel orders-panel">
@@ -1078,6 +1102,11 @@
             <strong id="oms-unknown">-</strong>
           </article>
         </div>
+        <details class="evidence-detail-group">
+          <summary>
+            <span>订单明细</span>
+            <small>展开查看对账列表</small>
+          </summary>
         <div class="table-wrap">
           <table>
             <thead>
@@ -1102,6 +1131,7 @@
             <tbody id="orders"></tbody>
           </table>
         </div>
+        </details>
       </section>
 
       <section class="panel raw-log-panel">
@@ -1109,10 +1139,16 @@
           <h2>原始事件详情</h2>
           <span>用于复盘提示词、数据、风控和订单流</span>
         </div>
+        <details class="evidence-detail-group">
+          <summary>
+            <span>原始事件流</span>
+            <small>展开查看完整日志</small>
+          </summary>
         <pre id="raw-log" class="raw-log">{}</pre>
+        </details>
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard8"></script>
+    <script src="/app.js?v=20260531-dashboard9"></script>
   </body>
 </html>

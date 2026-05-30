@@ -357,7 +357,29 @@ body[data-active-view="overview"] .account-grid {
   background: #fbfdff;
 }
 
+.evidence-detail-group,
+.ops-detail-group {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
 .backtest-detail-group summary {
+  display: flex;
+  min-height: 42px;
+  padding: 11px 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  color: #243247;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.evidence-detail-group summary,
+.ops-detail-group summary {
   display: flex;
   min-height: 42px;
   padding: 11px 12px;
@@ -378,7 +400,21 @@ body[data-active-view="overview"] .account-grid {
   overflow-wrap: anywhere;
 }
 
+.evidence-detail-group summary small,
+.ops-detail-group summary small {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .backtest-detail-group[open] {
+  padding: 0 12px 12px;
+}
+
+.evidence-detail-group[open],
+.ops-detail-group[open] {
   padding: 0 12px 12px;
 }
 
@@ -388,7 +424,22 @@ body[data-active-view="overview"] .account-grid {
   background: #f6f9fd;
 }
 
+.evidence-detail-group[open] summary,
+.ops-detail-group[open] summary {
+  margin: 0 -12px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #f6f9fd;
+}
+
 .backtest-detail-group .table-wrap {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.evidence-detail-group .table-wrap,
+.ops-detail-group .guidance-grid,
+.evidence-detail-group .guidance-grid,
+.evidence-detail-group .readiness-list {
   max-height: 340px;
   overflow: auto;
 }
