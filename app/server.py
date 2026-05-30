@@ -6319,8 +6319,9 @@ def go_live_gate_status() -> dict[str, Any]:
     )
 
     recovery = exchange_recovery_status()
+    recovery_report = recovery.get("last_report") or {}
     recovery_age = seconds_since(recovery.get("last_at"))
-    recovery_errors = (recovery.get("last_report") or {}).get("errors") or []
+    recovery_errors = recovery_report.get("errors") or []
     recovery_ok = bool(recovery.get("last_at")) and not recovery_errors and (
         recovery_age is not None and recovery_age <= EXCHANGE_RECOVERY_STALE_SECONDS
     )
@@ -6344,6 +6345,39 @@ def go_live_gate_status() -> dict[str, Any]:
             "threshold_seconds": EXCHANGE_RECOVERY_STALE_SECONDS,
             "errors": recovery_errors,
         },
+    )
+
+    live_open_orders_required = live_requested or live_mode_enabled
+    live_open_orders_snapshot = exchange_open_orders_snapshot_from_report(recovery_report, "live_guarded")
+    if live_open_orders_snapshot:
+        live_open_orders_check = exchange_open_orders_check("live_guarded", live_open_orders_snapshot)
+        live_open_orders_status = (
+            "pass"
+            if live_open_orders_check.get("status") == "pass"
+            else "fail" if live_open_orders_required else "warn"
+        )
+        live_open_orders_detail = live_open_orders_check.get("detail") or ""
+    else:
+        live_open_orders_check = {
+            "status": "missing",
+            "mode": "live_guarded",
+            "open_order_count": None,
+            "open_orders": [],
+            "detail": "最近一次交易所恢复同步没有 live openOrders 快照。",
+        }
+        live_open_orders_status = "fail" if live_open_orders_required else "warn"
+        live_open_orders_detail = "实盘前必须通过 /fapi/v1/openOrders 确认账户没有遗留挂单。"
+    add_gate(
+        "exchange_open_orders",
+        "交易所遗留挂单",
+        live_open_orders_status,
+        live_open_orders_detail,
+        {
+            "required": live_open_orders_required,
+            "recovery_last_at": recovery.get("last_at"),
+            "open_orders": live_open_orders_check,
+        },
+        required_for_live=live_open_orders_required,
     )
 
     live_snapshot = latest_exchange_account_snapshot("live_guarded")
@@ -10363,6 +10397,96 @@ def fetch_binance_account_snapshot(mode: str) -> dict[str, Any]:
         return signed_binance_request_for_mode("GET", "/fapi/v2/account", {}, normalized)
 
 
+def summarize_binance_open_order(order: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "symbol": order.get("symbol"),
+        "order_id": str(order.get("orderId") or ""),
+        "client_order_id": order.get("clientOrderId") or order.get("client_order_id") or "",
+        "side": order.get("side"),
+        "type": order.get("type"),
+        "status": order.get("status"),
+        "orig_qty": order.get("origQty") or order.get("orig_qty") or "",
+        "executed_qty": order.get("executedQty") or order.get("executed_qty") or "",
+        "price": order.get("price"),
+        "stop_price": order.get("stopPrice") or order.get("stop_price"),
+        "reduce_only": coerce_binance_bool(order.get("reduceOnly")),
+        "close_position": coerce_binance_bool(order.get("closePosition")),
+        "time_in_force": order.get("timeInForce"),
+        "update_time": order.get("updateTime") or order.get("update_time"),
+    }
+
+
+def fetch_binance_open_orders(mode: str) -> list[dict[str, Any]]:
+    normalized = ensure_binance_account_mode(mode)
+    payload = signed_binance_request_for_mode("GET", "/fapi/v1/openOrders", {}, normalized)
+    if not isinstance(payload, list):
+        raise ValueError("Binance openOrders endpoint did not return a list.")
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def binance_open_orders_snapshot(mode: str) -> dict[str, Any]:
+    normalized = ensure_binance_account_mode(mode)
+    orders = fetch_binance_open_orders(normalized)
+    summarized = [summarize_binance_open_order(order) for order in orders]
+    return {
+        "mode": normalized,
+        "status": "pass",
+        "synced_at": utc_now(),
+        "open_order_count": len(summarized),
+        "open_orders": summarized,
+        "endpoint": "/fapi/v1/openOrders",
+    }
+
+
+def exchange_open_orders_snapshot_from_report(report: dict[str, Any], mode: str) -> dict[str, Any] | None:
+    normalized = str(mode or "").lower().strip()
+    for item in report.get("open_orders") or []:
+        if isinstance(item, dict) and item.get("mode") == normalized:
+            return item
+    return None
+
+
+def exchange_open_orders_check(
+    mode: str,
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized = str(mode or "paper").lower().strip()
+    if normalized not in STATEFUL_EXCHANGE_ORDER_MODES:
+        return {
+            "status": "pass",
+            "mode": normalized,
+            "open_order_count": 0,
+            "open_orders": [],
+            "skipped": True,
+            "detail": "纸交易或 /order/test 验证模式不会提交真实状态订单，跳过交易所挂单检查。",
+        }
+    current = snapshot or binance_open_orders_snapshot(normalized)
+    open_orders = current.get("open_orders") or []
+    count = int(current.get("open_order_count") if current.get("open_order_count") is not None else len(open_orders))
+    status = "fail" if count else "pass"
+    return {
+        "status": status,
+        "mode": normalized,
+        "open_order_count": count,
+        "open_orders": open_orders[:20],
+        "synced_at": current.get("synced_at"),
+        "endpoint": current.get("endpoint", "/fapi/v1/openOrders"),
+        "skipped": False,
+        "detail": (
+            "交易所账户当前没有未完成挂单，可继续进行本次受控下单。"
+            if status == "pass"
+            else f"交易所账户存在 {count} 个未完成挂单；必须先撤单、成交或对账后才能提交新的状态订单。"
+        ),
+    }
+
+
+def assert_no_exchange_open_orders(mode: str) -> dict[str, Any]:
+    check = exchange_open_orders_check(mode)
+    if check["status"] != "pass":
+        raise ValueError(f"Exchange open-order gate blocks stateful submission: {check['detail']}")
+    return check
+
+
 def coerce_binance_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -10436,6 +10560,7 @@ def recover_exchange_state(trigger: str = "manual") -> dict[str, Any]:
         "completed_at": "",
         "orders": {},
         "account_snapshots": [],
+        "open_orders": [],
         "position_modes": [],
         "user_stream": binance_user_stream_status(),
         "user_stream_health": {},
@@ -10459,6 +10584,12 @@ def recover_exchange_state(trigger: str = "manual") -> dict[str, Any]:
         except Exception as exc:
             report["warnings"].append(
                 f"{mode_label(mode)} position mode check failed: {exc.__class__.__name__}: {exc}"
+            )
+        try:
+            report["open_orders"].append(binance_open_orders_snapshot(mode))
+        except Exception as exc:
+            report["warnings"].append(
+                f"{mode_label(mode)} open orders check failed: {exc.__class__.__name__}: {exc}"
             )
 
     if get_setting("binance_user_stream_listen_key", ""):
@@ -10513,6 +10644,7 @@ def compact_exchange_recovery_status(recovery: dict[str, Any] | None = None) -> 
         "warnings": (report.get("warnings") or [])[:8] if isinstance(report, dict) else [],
         "errors": (report.get("errors") or [])[:8] if isinstance(report, dict) else [],
         "position_modes": (report.get("position_modes") or [])[:8] if isinstance(report, dict) else [],
+        "open_orders": (report.get("open_orders") or [])[:8] if isinstance(report, dict) else [],
         "user_stream_health": report.get("user_stream_health") if isinstance(report, dict) else {},
     }
     stream_events = source.get("stream_events")
@@ -10642,6 +10774,7 @@ def persist_order(order: dict[str, Any]) -> dict[str, Any]:
             "pre_submit_validation": order.get("pre_submit_validation"),
             "market_freshness": order.get("market_freshness"),
             "order_conflict_check": order.get("order_conflict_check"),
+            "exchange_open_order_check": order.get("exchange_open_order_check"),
             "protection_geometry": order.get("protection_geometry"),
         },
     )
@@ -10738,6 +10871,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
     if intent["side"] == "HOLD" or risk["status"] == "rejected":
         return None
     order_conflict_check = assert_no_stateful_order_conflicts(mode, intent["symbol"])
+    exchange_open_order_check = assert_no_exchange_open_orders(mode)
     order_account_state = risk.get("account") or account_state_for_mode(mode)
     account_freshness = assert_fresh_execution_account_state(mode, order_account_state)
     market_freshness = assert_fresh_execution_market_snapshot(mode, risk.get("market"))
@@ -10748,6 +10882,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
+        order["exchange_open_order_check"] = exchange_open_order_check
         order["status"] = "paper_filled"
         order["venue_status"] = "PAPER_FILLED"
         persist_order(order)
@@ -10761,6 +10896,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
+        order["exchange_open_order_check"] = exchange_open_order_check
         params = binance_order_params(order, mode)
         validation = validate_binance_order_bundle(order, params, mode)
         order["status"] = "testnet_validated"
@@ -10778,6 +10914,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
+        order["exchange_open_order_check"] = exchange_open_order_check
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)
         order["leverage_sync"] = ensure_binance_leverage(order, mode)
@@ -10859,6 +10996,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
+        order["exchange_open_order_check"] = exchange_open_order_check
         order["go_live_gate"] = go_live_gate
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)

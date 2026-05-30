@@ -275,11 +275,11 @@ const viewGroups = {
   overview: [".account-grid", ".metrics-grid", ".system-grid"],
   ai: [".ai-operator-panel"],
   live: [".live-gate-panel"],
-  trading: [".workflow-workspace", ".intent-workspace"],
+  trading: [".workflow-workspace", ".intent-workspace", ".positions-panel", ".orders-panel"],
   risk: [".risk-panel"],
   backtest: [".backtest-panel"],
   ops: [".scheduler-panel", ".testnet-drill-panel", ".exchange-recovery-panel", ".alert-panel"],
-  evidence: [".readiness-panel", ".audit-chain-panel", ".positions-panel", ".orders-panel", ".raw-log-panel"],
+  evidence: [".readiness-panel", ".audit-chain-panel", ".raw-log-panel"],
   research: [".research-panel", ".architecture-panel"],
 };
 
@@ -888,6 +888,11 @@ function renderExchangeRecovery(recovery) {
   const stream = recovery.user_stream || {};
   const streamSummary = recovery.stream_summary || {};
   const streamEvents = recovery.stream_events || [];
+  const openOrderReports = report.open_orders || [];
+  const openOrderCount = openOrderReports.reduce(
+    (total, item) => total + Number(item.open_order_count || 0),
+    0,
+  );
   const warnings = report.warnings || [];
   const errors = report.errors || [];
   els.exchangeRecoveryStatus.textContent = errors.length
@@ -917,6 +922,10 @@ function renderExchangeRecovery(recovery) {
       <strong>${fmt((recovery.snapshots || []).length)}</strong>
     </article>
     <article>
+      <span>交易所挂单</span>
+      <strong>${fmt(openOrderCount)}</strong>
+    </article>
+    <article>
       <span>私有事件</span>
       <strong>${fmt(stream.event_count || streamSummary.recent_count || 0)} / ${stream.last_event_type || streamSummary.latest_event_type || "-"}</strong>
     </article>
@@ -926,6 +935,14 @@ function renderExchangeRecovery(recovery) {
     </article>
   `;
   const snapshots = recovery.snapshots || [];
+  const openOrderCard = openOrderReports.length
+    ? `
+      <article>
+        <strong>交易所挂单快照</strong>
+        <span>${openOrderReports.map((item) => `${modeText(item.mode)} ${fmt(item.open_order_count || 0)} 个 / ${shortTime(item.synced_at)}`).join("；")}</span>
+      </article>
+    `
+    : "";
   const eventCard = streamEvents.length
     ? `
       <article>
@@ -935,7 +952,7 @@ function renderExchangeRecovery(recovery) {
     `
     : "";
   if (!snapshots.length) {
-    els.exchangeSnapshots.innerHTML = `<article><strong>暂无交易所账户快照</strong><span>配置 Testnet 或实盘只读/交易 API key 后，可在这里同步账户余额与持仓摘要。</span></article>${eventCard}`;
+    els.exchangeSnapshots.innerHTML = `<article><strong>暂无交易所账户快照</strong><span>配置 Testnet 或实盘只读/交易 API key 后，可在这里同步账户余额与持仓摘要。</span></article>${openOrderCard}${eventCard}`;
     return;
   }
   els.exchangeSnapshots.innerHTML = snapshots
@@ -948,7 +965,7 @@ function renderExchangeRecovery(recovery) {
         </article>
       `;
     })
-    .join("") + eventCard;
+    .join("") + openOrderCard + eventCard;
 }
 
 function renderAiOperator(operator) {

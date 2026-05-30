@@ -5,6 +5,7 @@
   --muted: #647084;
   --line: #dbe3ee;
   --panel: #ffffff;
+  --panel-soft: #f8fafd;
   --blue: #185fd7;
   --green: #0e7a55;
   --red: #c83232;
@@ -21,7 +22,9 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: Inter, "Segoe UI", Arial, sans-serif;
-  background: #f5f7fb;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(245, 247, 251, 0) 170px),
+    #f5f7fb;
   color: var(--ink);
 }
 
@@ -37,7 +40,7 @@ textarea {
   justify-content: space-between;
   gap: 14px;
   align-items: center;
-  padding: 9px 24px;
+  padding: 8px 24px;
   background: #111827;
   color: #fff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -104,7 +107,7 @@ h2 {
 
 .shell {
   width: min(1480px, calc(100% - 32px));
-  margin: 8px auto 12px;
+  margin: 7px auto 10px;
 }
 
 .view-switcher {
@@ -183,6 +186,7 @@ h2 {
   overflow: auto;
   padding-right: 4px;
   scrollbar-gutter: stable;
+  min-height: 0;
 }
 
 .view-stage > .view-section {
@@ -255,6 +259,14 @@ body[data-active-view="trading"] .view-stage {
   align-items: start;
 }
 
+body[data-active-view="trading"] .positions-panel {
+  grid-column: 1;
+}
+
+body[data-active-view="trading"] .orders-panel {
+  grid-column: 2;
+}
+
 body[data-active-view="evidence"] .raw-log-panel {
   grid-column: 1 / -1;
 }
@@ -264,6 +276,7 @@ body[data-active-view="evidence"] .raw-log-panel {
   max-height: max(420px, calc(100vh - 224px));
   overflow: auto;
   scrollbar-gutter: stable;
+  min-height: 0;
 }
 
 body[data-active-view="overview"] .view-section {
@@ -1565,6 +1578,11 @@ body[data-active-view="trading"] .intent-workspace {
   gap: 10px;
 }
 
+body[data-active-view="trading"] .positions-panel,
+body[data-active-view="trading"] .orders-panel {
+  margin-top: 0;
+}
+
 .panel {
   padding: 13px;
   border-radius: 8px;
@@ -1580,6 +1598,7 @@ body[data-active-view="trading"] .intent-workspace {
   gap: 12px;
   align-items: center;
   margin-bottom: 9px;
+  min-height: 28px;
 }
 
 .subheading {
@@ -1978,6 +1997,43 @@ th {
 }
 
 @media (min-width: 761px) {
+  body[data-active-view="trading"] .view-stage {
+    align-content: stretch;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  body[data-active-view="trading"] .view-stage > .view-section {
+    max-height: calc((100vh - 222px) / 2);
+    min-height: 0;
+    overflow: auto;
+  }
+
+  body[data-active-view="trading"] .workflow-workspace,
+  body[data-active-view="trading"] .intent-workspace {
+    align-items: stretch;
+  }
+
+  body[data-active-view="trading"] .workflow-workspace > .panel,
+  body[data-active-view="trading"] .workflow-workspace > aside,
+  body[data-active-view="trading"] .intent-workspace > .panel {
+    min-height: 0;
+  }
+
+  body[data-active-view="trading"] .timeline {
+    padding-right: 2px;
+  }
+
+  body[data-active-view="trading"] .event {
+    padding: 10px;
+  }
+
+  body[data-active-view="trading"] .kv-list,
+  body[data-active-view="trading"] .intent-box,
+  body[data-active-view="trading"] .checks {
+    font-size: 13px;
+  }
+
   body[data-active-view="ops"] .view-stage {
     align-content: start;
     overflow: hidden;
@@ -1987,6 +2043,69 @@ th {
     max-height: calc((100vh - 224px) / 2);
     min-height: 0;
     overflow: auto;
+  }
+}
+
+@media (min-width: 1040px) {
+  body[data-active-view="trading"] .view-stage {
+    grid-template-columns: minmax(0, 1.28fr) minmax(330px, 0.72fr);
+    grid-auto-rows: minmax(0, 1fr);
+  }
+
+  body[data-active-view="trading"] .view-stage > .view-section {
+    max-height: calc((100vh - 158px) / 2);
+  }
+
+  body[data-active-view="trading"] .workflow-workspace {
+    grid-template-columns: minmax(0, 1.48fr) minmax(260px, 0.72fr);
+  }
+
+  body[data-active-view="trading"] .intent-workspace {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body[data-active-view="trading"] .positions-panel,
+  body[data-active-view="trading"] .orders-panel {
+    min-height: 190px;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 1039px) {
+  .topbar {
+    padding: 7px 20px;
+  }
+
+  .shell {
+    width: calc(100% - 24px);
+    margin: 6px auto;
+  }
+
+  .control-band {
+    grid-template-columns: minmax(132px, 0.7fr) minmax(132px, 0.7fr) minmax(0, 2fr);
+  }
+
+  .control-actions {
+    grid-template-columns: repeat(4, minmax(86px, 1fr));
+  }
+
+  .view-switcher {
+    margin: 7px 0;
+  }
+
+  .view-stage,
+  body[data-active-view="overview"] .view-stage,
+  .view-section.panel,
+  .view-section.workspace {
+    max-height: calc(100vh - 204px);
+  }
+
+  body[data-active-view="trading"] .view-stage {
+    max-height: calc(100vh - 208px);
+    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  }
+
+  body[data-active-view="trading"] .view-stage > .view-section {
+    max-height: calc((100vh - 224px) / 2);
   }
 }
 
