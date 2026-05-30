@@ -4,15 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-workbench" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard2" />
   </head>
   <body>
     <header class="topbar">
-      <div>
+      <div class="brand-block">
         <p class="eyebrow">本地纸交易控制台</p>
         <h1>加密货币合约 AI 交易工作台</h1>
       </div>
-      <div class="status-pill" id="system-status">连接中</div>
+      <div class="topbar-meta">
+        <span>Binance U 本位</span>
+        <div class="status-pill" id="system-status">连接中</div>
+      </div>
     </header>
 
     <main class="shell">
@@ -31,10 +34,12 @@
             <option value="paper">本地纸交易</option>
           </select>
         </div>
-        <button id="start-run" class="primary">启动一次分析</button>
-        <button id="stop" class="danger">紧急停止</button>
-        <button id="panic-stop" class="danger">事故停机+撤单</button>
-        <button id="reset-stop" class="secondary">解除停止</button>
+        <div class="control-actions">
+          <button id="start-run" class="primary">启动一次分析</button>
+          <button id="stop" class="danger">紧急停止</button>
+          <button id="panic-stop" class="danger">事故停机+撤单</button>
+          <button id="reset-stop" class="secondary">解除停止</button>
+        </div>
       </section>
 
       <nav class="view-switcher" aria-label="工作台视图">
@@ -50,22 +55,22 @@
       </nav>
 
       <section class="system-grid">
-        <article class="system-card">
+        <article class="system-card status-card">
           <span>AI 提供方</span>
           <strong id="ai-provider">本地规则</strong>
           <small id="ai-model">确定性规则 v1</small>
         </article>
-        <article class="system-card">
+        <article class="system-card status-card">
           <span>AI 状态</span>
           <strong id="ai-ready">-</strong>
           <small id="ai-fallback">-</small>
         </article>
-        <article class="system-card">
+        <article class="system-card status-card">
           <span>行情来源</span>
           <strong id="market-source">-</strong>
           <small id="enabled-modes">-</small>
         </article>
-        <article class="system-card">
+        <article class="system-card status-card">
           <span>交易所边界</span>
           <strong id="exchange-mode">本地纸交易</strong>
           <small id="testnet-status">-</small>
@@ -406,19 +411,19 @@
       </section>
 
       <section class="metrics-grid">
-        <article class="metric">
+        <article class="metric state-card">
           <span>运行状态</span>
           <strong id="run-status">未启动</strong>
         </article>
-        <article class="metric">
+        <article class="metric action-card">
           <span>最终动作</span>
           <strong id="final-action">-</strong>
         </article>
-        <article class="metric">
+        <article class="metric risk-card">
           <span>风控结果</span>
           <strong id="risk-status">-</strong>
         </article>
-        <article class="metric">
+        <article class="metric env-card">
           <span>环境</span>
           <strong id="environment">本地 / 本地纸交易</strong>
         </article>
@@ -1059,6 +1064,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-workbench"></script>
+    <script src="/app.js?v=20260531-dashboard2"></script>
   </body>
 </html>

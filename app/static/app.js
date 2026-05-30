@@ -271,7 +271,7 @@ let goLiveGateLoading = false;
 let goLiveGateLoadedAt = 0;
 
 const viewGroups = {
-  overview: [".system-grid", ".metrics-grid", ".account-grid"],
+  overview: [".account-grid", ".metrics-grid", ".system-grid"],
   ai: [".ai-operator-panel"],
   live: [".live-gate-panel"],
   trading: [".workflow-workspace", ".intent-workspace"],
@@ -1500,11 +1500,16 @@ function renderMetrics(data) {
   els.systemStatus.style.borderColor = data.system.emergency_stop
     ? "#ffb4b4"
     : "rgba(255,255,255,.25)";
+  els.systemStatus.dataset.status = data.system.emergency_stop ? "danger" : "ok";
   els.runStatus.textContent = run ? statusText(run.status) : "未启动";
   els.finalAction.textContent = sideText(run?.final_action);
   els.riskStatus.textContent = statusText(run?.risk_status);
   els.environment.textContent = `${data.system.environment === "local" ? "本地" : data.system.environment} / ${modeText(data.system.mode)}`;
   els.runId.textContent = run ? `运行 ${run.id}` : "无运行";
+  document.querySelector(".state-card")?.setAttribute("data-status", data.system.emergency_stop ? "danger" : run?.status === "completed" ? "ok" : "neutral");
+  document.querySelector(".action-card")?.setAttribute("data-status", run?.final_action === "buy" || run?.final_action === "sell" ? "active" : "neutral");
+  document.querySelector(".risk-card")?.setAttribute("data-status", run?.risk_status === "rejected" ? "danger" : run?.risk_status === "approved" ? "ok" : "neutral");
+  document.querySelector(".env-card")?.setAttribute("data-status", data.system.mode === "live" ? "danger" : data.system.mode?.includes("testnet") ? "active" : "neutral");
 }
 
 function money(value) {
@@ -1520,6 +1525,10 @@ function renderAccount(account) {
   els.grossExposure.textContent = money(data.gross_exposure_usdt);
   const pnl = Number(data.unrealized_pnl_usdt || 0);
   els.unrealizedPnl.style.color = pnl > 0 ? "#10845b" : pnl < 0 ? "#cf2e2e" : "";
+  els.unrealizedPnl.closest(".metric")?.setAttribute("data-status", pnl > 0 ? "ok" : pnl < 0 ? "danger" : "neutral");
+  els.accountEquity.closest(".metric")?.setAttribute("data-status", "active");
+  els.freeMargin.closest(".metric")?.setAttribute("data-status", "ok");
+  els.grossExposure.closest(".metric")?.setAttribute("data-status", "neutral");
 }
 
 function renderTimeline(events) {
@@ -1528,7 +1537,13 @@ function renderTimeline(events) {
       `<div class="empty" style="min-height: 360px">点击“启动一次分析”后，这里会显示每一步代理和风控记录</div>`;
     return;
   }
-  els.timeline.innerHTML = events
+  const limit = 18;
+  const visibleEvents = events.slice(-limit).reverse();
+  const hiddenCount = Math.max(0, events.length - visibleEvents.length);
+  const summary = hiddenCount
+    ? `<div class="timeline-summary">显示最近 ${visibleEvents.length} 条关键事件，完整原始记录在“证据”标签中保留。</div>`
+    : "";
+  els.timeline.innerHTML = summary + visibleEvents
     .map(
       (event) => `
         <article class="event" data-kind="${event.kind}">
