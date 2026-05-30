@@ -952,7 +952,7 @@ function renderAiOperator(operator) {
     els.aiOperatorMessages.innerHTML = `
       <div class="ai-message assistant">
         <strong>AI 操作员</strong>
-        <p>我可以帮你检查系统、读取工作区文件，并在权限打开时写入文件、应用补丁或运行 Shell。常用命令：/readiness、/go-live、/resolve-live-blockers、/handoff、/launch-kit、/env-pack、/live-postflight、/panic-stop --confirm PANIC_STOP、/list、/read、/write、/append、/replace、/patch、/restore、/shell。</p>
+        <p>我可以帮你检查系统、读取工作区文件，并在权限打开时写入文件、应用补丁或运行 Shell。右侧快捷命令会先填入输入框，你也可以直接描述任务。</p>
       </div>
     `;
     return;
@@ -2711,6 +2711,13 @@ els.aiOperatorInput.addEventListener("keydown", (event) => {
     event.preventDefault();
     sendAiOperatorMessage();
   }
+});
+
+document.querySelectorAll(".ai-command-chip").forEach((button) => {
+  button.addEventListener("click", () => {
+    els.aiOperatorInput.value = button.dataset.aiCommand || "";
+    els.aiOperatorInput.focus();
+  });
 });
 
 els.startRun.addEventListener("click", async () => {

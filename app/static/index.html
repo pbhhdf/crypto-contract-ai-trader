@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard2" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard6" />
   </head>
   <body>
     <header class="topbar">
@@ -156,7 +156,15 @@
         <div class="ai-operator-layout">
           <div id="ai-operator-messages" class="ai-operator-messages"></div>
           <div class="ai-operator-controls">
-            <textarea id="ai-operator-input" rows="4" placeholder="告诉 AI 操作员要检查或修改什么，也可以输入 /readiness、/go-live、/resolve-live-blockers、/final-live-ready、/server-readiness、/server-readiness-run、/handoff、/launch-kit、/env-pack、/live-postflight、/panic-stop --confirm PANIC_STOP、/bundle、/list、/read、/write、/patch、/shell"></textarea>
+            <div class="ai-command-strip" aria-label="AI 操作员快捷命令">
+              <button type="button" class="ai-command-chip" data-ai-command="/readiness">就绪检查</button>
+              <button type="button" class="ai-command-chip" data-ai-command="/go-live">实盘门禁</button>
+              <button type="button" class="ai-command-chip" data-ai-command="/resolve-live-blockers">阻塞解除</button>
+              <button type="button" class="ai-command-chip" data-ai-command="/handoff">交接单</button>
+              <button type="button" class="ai-command-chip" data-ai-command="/bundle">部署包</button>
+              <button type="button" class="ai-command-chip danger-chip" data-ai-command="/panic-stop --confirm PANIC_STOP">紧急停机</button>
+            </div>
+            <textarea id="ai-operator-input" rows="4" placeholder="输入要检查、修改或执行的任务；Ctrl+Enter 发送。"></textarea>
             <div class="ai-operator-actions">
               <button id="send-ai-operator" class="primary">发送给 AI</button>
               <span id="ai-operator-permissions">权限读取中</span>
@@ -270,13 +278,6 @@
         </div>
         <div class="live-gate-actions">
           <button id="check-live-gate" class="secondary">立即检查门禁</button>
-          <button id="export-go-live-report" class="secondary">导出准入报告</button>
-          <button id="export-live-launch-plan" class="secondary">导出上线计划</button>
-          <button id="export-live-ops-handoff" class="secondary">导出实盘交接单</button>
-          <button id="export-live-launch-kit" class="secondary">导出上线套件</button>
-          <button id="export-live-env-pack" class="secondary">导出环境模板</button>
-          <button id="export-server-bundle" class="secondary">导出部署包</button>
-          <button id="export-server-go-live-audit" class="secondary">导出服务器审计包</button>
           <button id="check-final-live-ready" class="secondary">最终实盘检查</button>
           <button id="run-server-live-readiness" class="primary">启动准入推进器</button>
           <label class="toggle-row compact-toggle" for="server-live-readiness-testnet">
@@ -306,30 +307,44 @@
           <button id="check-live-postflight" class="secondary">检查首单复盘</button>
           <button id="resolve-live-blockers" class="secondary">生成解除路线</button>
           <span id="live-gate-summary">等待读取准入状态</span>
+          <details class="live-export-drawer">
+            <summary>导出文件与交接材料</summary>
+            <div class="live-export-actions">
+              <button id="export-go-live-report" class="secondary">导出准入报告</button>
+              <button id="export-live-launch-plan" class="secondary">导出上线计划</button>
+              <button id="export-live-ops-handoff" class="secondary">导出实盘交接单</button>
+              <button id="export-live-launch-kit" class="secondary">导出上线套件</button>
+              <button id="export-live-env-pack" class="secondary">导出环境模板</button>
+              <button id="export-server-bundle" class="secondary">导出部署包</button>
+              <button id="export-server-go-live-audit" class="secondary">导出服务器审计包</button>
+            </div>
+          </details>
         </div>
-        <div class="live-pilot-panel">
-          <div class="panel-heading small-heading">
-            <h3>实盘首单执行器</h3>
-            <span id="live-pilot-status">未检查</span>
+        <div class="live-pilot-grid">
+          <div class="live-pilot-panel">
+            <div class="panel-heading small-heading">
+              <h3>实盘首单执行器</h3>
+              <span id="live-pilot-status">未检查</span>
+            </div>
+            <p id="live-pilot-summary" class="muted-text">只在最终实盘检查、短时武装和确认短语同时满足时提交一次实盘保护模式工作流。</p>
+            <div id="live-pilot-list" class="guardrail-list"></div>
           </div>
-          <p id="live-pilot-summary" class="muted-text">只在最终实盘检查、短时武装和确认短语同时满足时提交一次实盘保护模式工作流。</p>
-          <div id="live-pilot-list" class="guardrail-list"></div>
-        </div>
-        <div class="live-pilot-panel">
-          <div class="panel-heading small-heading">
-            <h3>实盘首单复盘</h3>
-            <span id="live-postflight-status">未检查</span>
+          <div class="live-pilot-panel">
+            <div class="panel-heading small-heading">
+              <h3>实盘首单复盘</h3>
+              <span id="live-postflight-status">未检查</span>
+            </div>
+            <p id="live-postflight-summary" class="muted-text">提交首单后检查 OMS、告警、审计链、交易所快照和解除武装状态。</p>
+            <div id="live-postflight-list" class="guardrail-list"></div>
           </div>
-          <p id="live-postflight-summary" class="muted-text">提交首单后检查 OMS、告警、审计链、交易所快照和解除武装状态。</p>
-          <div id="live-postflight-list" class="guardrail-list"></div>
-        </div>
-        <div class="live-pilot-panel">
-          <div class="panel-heading small-heading">
-            <h3>实盘阻塞解除路线</h3>
-            <span id="live-blocker-status">未生成</span>
+          <div class="live-pilot-panel">
+            <div class="panel-heading small-heading">
+              <h3>实盘阻塞解除路线</h3>
+              <span id="live-blocker-status">未生成</span>
+            </div>
+            <p id="live-blocker-summary" class="muted-text">把当前实盘阻塞项翻译成服务器环境变量、命令和验收证据。</p>
+            <div id="live-blocker-list" class="guardrail-list"></div>
           </div>
-          <p id="live-blocker-summary" class="muted-text">把当前实盘阻塞项翻译成服务器环境变量、命令和验收证据。</p>
-          <div id="live-blocker-list" class="guardrail-list"></div>
         </div>
         <div class="testnet-drill-facts">
           <article>
@@ -1064,6 +1079,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard2"></script>
+    <script src="/app.js?v=20260531-dashboard6"></script>
   </body>
 </html>

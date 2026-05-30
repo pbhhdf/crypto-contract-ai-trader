@@ -500,6 +500,7 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 
 .live-gate-panel {
   margin-top: 16px;
+  overflow-x: hidden !important;
 }
 
 .exchange-recovery-panel {
@@ -537,10 +538,23 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 
 .live-gate-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
   align-items: end;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+}
+
+.live-gate-actions button,
+.live-gate-actions input,
+.live-gate-actions label {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.live-gate-actions button {
+  padding: 0 10px;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .compact-control {
@@ -559,6 +573,65 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 .live-gate-actions span {
   color: var(--muted);
   font-size: 13px;
+}
+
+#live-gate-summary {
+  grid-column: span 2;
+  align-self: center;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid #d6dfeb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.live-export-drawer {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.live-export-drawer summary {
+  min-height: 38px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #344054;
+  font-weight: 800;
+}
+
+.live-export-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.live-pilot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+
+.live-pilot-panel {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.live-pilot-panel .guardrail-list {
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.live-pilot-panel .muted-text {
+  min-height: 44px;
+  margin: 0 0 8px;
 }
 
 .live-attestation-panel {
@@ -1346,13 +1419,15 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.45fr);
   gap: 14px;
+  min-width: 0;
 }
 
 .ai-operator-messages {
   display: grid;
   gap: 10px;
   max-height: 360px;
-  overflow: auto;
+  min-width: 0;
+  overflow: auto hidden;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1362,6 +1437,7 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 .ai-message {
   display: grid;
   gap: 6px;
+  min-width: 0;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1387,6 +1463,7 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 .ai-message p {
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   line-height: 1.5;
 }
 
@@ -1399,16 +1476,49 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   background: #0f172a;
   color: #dbeafe;
   font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .ai-operator-controls {
   display: grid;
   gap: 10px;
+  align-content: start;
+}
+
+.ai-command-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-command-chip {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #cfd9e8;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #243247;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ai-command-chip:hover {
+  background: #eef4ff;
+  border-color: #b8c9e6;
+}
+
+.ai-command-chip.danger-chip {
+  color: #a12626;
+  border-color: #efcaca;
+  background: #fff7f7;
 }
 
 .ai-operator-controls textarea {
   width: 100%;
-  min-height: 128px;
+  min-height: 112px;
   resize: vertical;
 }
 
@@ -1537,12 +1647,14 @@ th {
   .live-gate-facts,
   .evidence-chip-grid,
   .final-live-ready,
+  .live-pilot-grid,
   .attestation-checks,
   .attestation-actions,
   .audit-chain-summary,
   .alert-card,
   .alert-actions,
   .live-gate-actions,
+  .live-export-actions,
   .alert-deliveries,
   .exchange-recovery-actions,
   .recovery-facts,
@@ -1580,6 +1692,14 @@ th {
   }
 
   body[data-active-view="evidence"] .raw-log-panel {
+    grid-column: auto;
+  }
+
+  .live-pilot-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #live-gate-summary {
     grid-column: auto;
   }
 }
