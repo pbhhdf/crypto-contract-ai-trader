@@ -215,6 +215,7 @@ def main() -> int:
                 "scripts/check_exchange_open_order_gate.py",
                 "scripts/check_exchange_position_gate.py",
                 "scripts/check_parent_cancel_cascade.py",
+                "scripts/check_orphan_protection_guard.py",
                 "scripts/check_startup_disarms_live_arming.py",
                 "scripts/check_scheduler.py",
                 "scripts/check_risk_controls.py",
@@ -283,6 +284,7 @@ def main() -> int:
     steps.append(run_step("exchange_open_order_gate", [PYTHON, "scripts/check_exchange_open_order_gate.py"], timeout=30))
     steps.append(run_step("exchange_position_gate", [PYTHON, "scripts/check_exchange_position_gate.py"], timeout=30))
     steps.append(run_step("parent_cancel_cascade", [PYTHON, "scripts/check_parent_cancel_cascade.py"], timeout=60))
+    steps.append(run_step("orphan_protection_guard", [PYTHON, "scripts/check_orphan_protection_guard.py"], timeout=60))
     steps.append(run_step("startup_disarms_live_arming", [PYTHON, "scripts/check_startup_disarms_live_arming.py"], timeout=60))
     steps.append(run_step("ui_chinese", [PYTHON, "scripts/check_ui_chinese.py"], timeout=30))
     steps.append(run_step("binance_filters", [PYTHON, "scripts/check_binance_filters.py"], timeout=60))

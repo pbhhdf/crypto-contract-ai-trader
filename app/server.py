@@ -4633,6 +4633,84 @@ def get_child_protection_orders(parent_order_id: str) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def cancel_child_protections_for_terminal_parent(
+    parent_order: dict[str, Any],
+    mode: str,
+    trigger: str,
+    parent_venue_status: str,
+    payload: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    if parent_order.get("parent_order_id"):
+        return []
+    venue_status = str(parent_venue_status or "").upper()
+    if venue_status not in {"CANCELED", "EXPIRED", "EXPIRED_IN_MATCH", "REJECTED"}:
+        return []
+    parent_order_id = str(parent_order.get("id") or "")
+    if not parent_order_id:
+        return []
+    attempts: list[dict[str, Any]] = []
+    for child in get_child_protection_orders(parent_order_id):
+        attempt = {
+            "order_id": child.get("id"),
+            "kind": child.get("protection_kind"),
+            "previous_status": child.get("status"),
+            "trigger": trigger,
+            "parent_venue_status": venue_status,
+        }
+        if child.get("status") not in CANCELABLE_BINANCE_ORDER_STATUSES:
+            attempt.update({"status": "skipped", "reason": "child_order_not_cancelable"})
+        else:
+            try:
+                canceled_child = cancel_testnet_order(str(child["id"]))
+                attempt.update(
+                    {
+                        "status": "canceled",
+                        "new_status": canceled_child.get("status"),
+                        "venue_status": canceled_child.get("venue_status"),
+                        "reconcile_status": canceled_child.get("reconcile_status"),
+                    }
+                )
+            except Exception as child_exc:  # noqa: BLE001 - preserve parent state while surfacing child failures.
+                attempt.update(
+                    {
+                        "status": "failed",
+                        "error_type": child_exc.__class__.__name__,
+                        "error": str(child_exc),
+                    }
+                )
+        attempts.append(attempt)
+    if not attempts:
+        return []
+    insert_order_transition(
+        parent_order_id,
+        parent_order.get("status"),
+        parent_order.get("status", "terminal"),
+        "binance_child_protection_cancel_after_parent_terminal",
+        {
+            "trigger": trigger,
+            "parent_venue_status": venue_status,
+            "attempts": attempts,
+            "payload": payload or {},
+        },
+    )
+    failed_children = [item for item in attempts if item.get("status") == "failed"]
+    if failed_children:
+        prefix = "live" if mode == "live_guarded" else "testnet"
+        raise_alert(
+            f"protection.cancel_after_parent_terminal_failed.{parent_order_id}",
+            "critical",
+            "OMS",
+            f"Binance {prefix} child protection cancel failed",
+            (
+                f"Parent order {parent_order_id} reached {venue_status} via {trigger}, but "
+                f"{len(failed_children)} child protection order(s) could not be canceled automatically. "
+                "Manual venue review is required."
+            ),
+            {"parent_order": parent_order, "attempts": attempts, "trigger": trigger, "payload": payload or {}},
+        )
+    return attempts
+
+
 def insert_order_transition(
     order_id: str,
     from_status: str | None,
@@ -4804,7 +4882,7 @@ def reconcile_order(order_id: str) -> dict[str, Any]:
                 "EXPIRED": f"{prefix}_canceled",
                 "REJECTED": f"{prefix}_canceled",
             }.get(venue_status, f"{prefix}_submitted")
-            return update_order_state(
+            updated = update_order_state(
                 order_id,
                 status=new_status,
                 venue_order_id=venue_order_id or None,
@@ -4818,6 +4896,16 @@ def reconcile_order(order_id: str) -> dict[str, Any]:
                 reason="binance_order_reconcile",
                 payload={"response": response},
             )
+            child_attempts = cancel_child_protections_for_terminal_parent(
+                updated,
+                order_mode,
+                "binance_order_reconcile",
+                venue_status,
+                {"response": response},
+            )
+            if child_attempts:
+                updated["child_protection_cancel_attempts"] = child_attempts
+            return updated
         except Exception as exc:
             return update_order_state(
                 order_id,
@@ -4910,58 +4998,16 @@ def cancel_testnet_order(order_id: str) -> dict[str, Any]:
         reason="binance_order_cancel",
         payload={"response": response},
     )
-    child_attempts: list[dict[str, Any]] = []
-    if not order.get("parent_order_id") and venue_status in {"CANCELED", "EXPIRED"}:
-        for child in get_child_protection_orders(order_id):
-            attempt = {
-                "order_id": child.get("id"),
-                "kind": child.get("protection_kind"),
-                "previous_status": child.get("status"),
-            }
-            if child.get("status") not in CANCELABLE_BINANCE_ORDER_STATUSES:
-                attempt.update({"status": "skipped", "reason": "child_order_not_cancelable"})
-            else:
-                try:
-                    canceled_child = cancel_testnet_order(str(child["id"]))
-                    attempt.update(
-                        {
-                            "status": "canceled",
-                            "new_status": canceled_child.get("status"),
-                            "venue_status": canceled_child.get("venue_status"),
-                            "reconcile_status": canceled_child.get("reconcile_status"),
-                        }
-                    )
-                except Exception as child_exc:  # noqa: BLE001 - parent cancel should still return with child evidence.
-                    attempt.update(
-                        {
-                            "status": "failed",
-                            "error_type": child_exc.__class__.__name__,
-                            "error": str(child_exc),
-                        }
-                    )
-            child_attempts.append(attempt)
+    if not order.get("parent_order_id") and venue_status in {"CANCELED", "EXPIRED", "EXPIRED_IN_MATCH", "REJECTED"}:
+        child_attempts = cancel_child_protections_for_terminal_parent(
+            updated,
+            order_mode,
+            "binance_order_cancel",
+            venue_status,
+            {"response": response},
+        )
         if child_attempts:
             updated["child_protection_cancel_attempts"] = child_attempts
-            insert_order_transition(
-                order_id,
-                updated.get("status"),
-                updated.get("status", order.get("status")),
-                "binance_child_protection_cancel_after_parent_cancel",
-                {"attempts": child_attempts},
-            )
-            failed_children = [item for item in child_attempts if item.get("status") == "failed"]
-            if failed_children:
-                raise_alert(
-                    f"protection.cancel_after_parent_failed.{order_id}",
-                    "critical",
-                    "OMS",
-                    f"Binance {prefix} child protection cancel failed",
-                    (
-                        f"Parent order {order_id} was canceled, but {len(failed_children)} child protection "
-                        "order(s) could not be canceled automatically. Manual venue review is required."
-                    ),
-                    {"parent_order": updated, "attempts": child_attempts},
-                )
     return updated
 
 
@@ -10228,6 +10274,18 @@ def handle_private_order_update(mode: str, event: dict[str, Any]) -> tuple[bool,
         reason="binance_private_order_update",
         payload={"event": event},
     )
+    child_attempts = cancel_child_protections_for_terminal_parent(
+        updated,
+        mode,
+        "binance_private_order_update",
+        venue_status,
+        {"event": event},
+    )
+    if child_attempts:
+        return True, (
+            f"Updated local order {updated['id']} from private stream; "
+            f"child protection cancel attempts={len(child_attempts)}."
+        )
     return True, f"Updated local order {updated['id']} from private stream."
 
 
