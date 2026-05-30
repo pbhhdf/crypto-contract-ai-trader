@@ -109,6 +109,7 @@ def main() -> int:
     server.init_db()
     suffix = uuid.uuid4().hex[:8].upper()
     symbol = f"TST{suffix[:4]}USDT"
+    other_symbol = f"ALT{suffix[:4]}USDT"
     testnet_id = f"TESTLIVE-CONFLICT-{suffix}"
     live_id = f"LIVE-CONFLICT-{suffix}"
     order_ids = [testnet_id, live_id]
@@ -122,22 +123,28 @@ def main() -> int:
         conflicts = server.stateful_order_conflicts("binance_testnet_place_order", symbol)
         if not any(item.get("id") == testnet_id for item in conflicts):
             return fail("pending testnet order did not block same-symbol stateful execution", conflicts)
+        account_conflicts = server.stateful_order_conflicts("binance_testnet_place_order", other_symbol)
+        cross_symbol_conflict = next((item for item in account_conflicts if item.get("id") == testnet_id), None)
+        if not cross_symbol_conflict:
+            return fail("pending testnet order did not block same-account stateful execution", account_conflicts)
+        if cross_symbol_conflict.get("scope") != "same_mode_account":
+            return fail("cross-symbol conflict did not record account-level scope", cross_symbol_conflict)
 
         try:
-            server.assert_no_stateful_order_conflicts("binance_testnet_place_order", symbol)
+            server.assert_no_stateful_order_conflicts("binance_testnet_place_order", other_symbol)
             return fail("assert_no_stateful_order_conflicts accepted a pending testnet order")
         except ValueError as exc:
             if "Stateful order conflict blocks" not in str(exc):
                 return fail("unexpected conflict assertion error", {"error": str(exc)})
 
         server.account_state_for_mode = lambda mode: fresh_account(str(mode or "").lower().strip())
-        server.configure_risk({**original_config, "allowed_symbols": [symbol], "max_open_positions": 0})
-        risk = server.risk_check(intent(symbol), fresh_market(symbol), "binance_testnet_place_order")
+        server.configure_risk({**original_config, "allowed_symbols": [symbol, other_symbol], "max_open_positions": 0})
+        risk = server.risk_check(intent(other_symbol), fresh_market(other_symbol), "binance_testnet_place_order")
         conflict_check = next((item for item in risk.get("checks", []) if item.get("name") == "Stateful order conflict"), None)
         if not conflict_check:
             return fail("risk checks do not include Stateful order conflict", risk)
         if conflict_check.get("status") != "fail" or risk.get("status") != "rejected":
-            return fail("risk did not reject a same-symbol pending stateful order", risk)
+            return fail("risk did not reject a same-account pending stateful order", risk)
 
         server.update_order_state(
             testnet_id,
@@ -148,11 +155,15 @@ def main() -> int:
             reason="stateful_conflict_check_resolved",
         )
         resolved_conflicts = server.stateful_order_conflicts("binance_testnet_place_order", symbol)
-        if any(item.get("id") == testnet_id for item in resolved_conflicts):
-            return fail("terminal reconciled testnet order still blocked new execution", resolved_conflicts)
+        resolved_account_conflicts = server.stateful_order_conflicts("binance_testnet_place_order", other_symbol)
+        if any(item.get("id") == testnet_id for item in resolved_conflicts + resolved_account_conflicts):
+            return fail(
+                "terminal reconciled testnet order still blocked new execution",
+                {"same_symbol": resolved_conflicts, "same_account": resolved_account_conflicts},
+            )
 
         server.persist_order(make_order(live_id, symbol, "live_submitted", "NEW", "needs_reconcile"))
-        live_conflicts = server.stateful_order_conflicts("live_guarded", symbol)
+        live_conflicts = server.stateful_order_conflicts("live_guarded", other_symbol)
         testnet_conflicts_after_live = server.stateful_order_conflicts("binance_testnet_place_order", symbol)
         if not any(item.get("id") == live_id for item in live_conflicts):
             return fail("live submitted order did not block live execution", live_conflicts)
@@ -164,8 +175,10 @@ def main() -> int:
                 {
                     "ok": True,
                     "symbol": symbol,
+                    "other_symbol": other_symbol,
                     "testnet_conflict_id": testnet_id,
                     "live_conflict_id": live_id,
+                    "account_conflict_scope": cross_symbol_conflict.get("scope"),
                     "risk_conflict_check": conflict_check,
                     "live_conflicts": live_conflicts,
                 },

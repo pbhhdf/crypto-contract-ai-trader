@@ -8936,21 +8936,22 @@ def stateful_order_conflict_reason(order: dict[str, Any], mode: str, symbol: str
     normalized_mode = str(mode or "").lower().strip()
     if normalized_mode not in STATEFUL_EXCHANGE_ORDER_MODES:
         return ""
-    if str(order.get("symbol") or "").upper().strip() != str(symbol or "").upper().strip():
-        return ""
     order_mode = stateful_order_mode_for_order(order)
     if order_mode not in {normalized_mode, "stateful_unknown"}:
         return ""
+    order_symbol = str(order.get("symbol") or "").upper().strip()
+    requested_symbol = str(symbol or "").upper().strip()
+    scope = "同交易对的" if order_symbol == requested_symbol else f"同执行环境其他交易对 {order_symbol or '-'} 的"
     status = str(order.get("status") or "").lower().strip()
     reconcile_status = str(order.get("reconcile_status") or "").lower().strip()
     venue_status = str(order.get("venue_status") or "").upper().strip()
     terminal_venue_statuses = {"FILLED", "CANCELED", "EXPIRED", "REJECTED"}
     if status == "pending_reconcile" or venue_status == "UNKNOWN":
-        return "订单处于未知或待对账状态，必须先 reconcile 后才能重试"
+        return f"{scope}订单处于未知或待对账状态，必须先 reconcile 后才能重试"
     if status in CANCELABLE_BINANCE_ORDER_STATUSES and venue_status not in terminal_venue_statuses:
-        return "交易所订单可能仍然打开，必须先确认、撤单或成交终态"
+        return f"{scope}交易所订单可能仍然打开，必须先确认、撤单或成交终态"
     if reconcile_status in {"unchecked", "needs_reconcile", "needs_review"} and status in NEEDS_RECONCILE_STATUSES:
-        return "本地 OMS 仍要求复核该订单"
+        return f"{scope}本地 OMS 仍要求复核该订单"
     return ""
 
 
@@ -8969,6 +8970,12 @@ def stateful_order_conflicts(mode: str, symbol: str, limit: int = 500) -> list[d
                     "reconcile_status": order.get("reconcile_status"),
                     "updated_at": order.get("updated_at"),
                     "mode": stateful_order_mode_for_order(order),
+                    "requested_symbol": symbol,
+                    "scope": (
+                        "same_symbol"
+                        if str(order.get("symbol") or "").upper().strip() == str(symbol or "").upper().strip()
+                        else "same_mode_account"
+                    ),
                     "reason": reason,
                 }
             )
@@ -9028,9 +9035,9 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
             "name": "Stateful order conflict",
             "status": "fail" if order_conflicts else "pass",
             "detail": (
-                f"同交易对存在 {len(order_conflicts)} 个未完成或待对账真实订单，必须先执行 OMS 对账/撤单。"
+                f"同执行环境存在 {len(order_conflicts)} 个未完成或待对账真实订单，必须先执行 OMS 对账/撤单。"
                 if order_conflicts
-                else "同交易对没有阻塞新真实订单的未对账/未知状态订单。"
+                else "同执行环境没有阻塞新真实订单的未对账/未知状态订单。"
             ),
         },
         {
