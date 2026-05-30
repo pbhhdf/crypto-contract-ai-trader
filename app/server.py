@@ -6380,6 +6380,39 @@ def go_live_gate_status() -> dict[str, Any]:
         required_for_live=live_open_orders_required,
     )
 
+    live_positions_required = live_requested or live_mode_enabled
+    live_position_snapshot = exchange_account_snapshot_from_report(recovery_report, "live_guarded")
+    if live_position_snapshot:
+        live_position_check = exchange_positions_check("live_guarded", live_position_snapshot)
+        live_position_status = (
+            "pass"
+            if live_position_check.get("status") == "pass"
+            else "fail" if live_positions_required else "warn"
+        )
+        live_position_detail = live_position_check.get("detail") or ""
+    else:
+        live_position_check = {
+            "status": "missing",
+            "mode": "live_guarded",
+            "open_position_count": None,
+            "positions": [],
+            "detail": "最近一次交易所恢复同步没有 live account snapshot 快照。",
+        }
+        live_position_status = "fail" if live_positions_required else "warn"
+        live_position_detail = "实盘前必须通过 /fapi/v2/account 或 /fapi/v3/account 确认账户没有遗留持仓。"
+    add_gate(
+        "exchange_open_positions",
+        "交易所遗留持仓",
+        live_position_status,
+        live_position_detail,
+        {
+            "required": live_positions_required,
+            "recovery_last_at": recovery.get("last_at"),
+            "positions": live_position_check,
+        },
+        required_for_live=live_positions_required,
+    )
+
     live_snapshot = latest_exchange_account_snapshot("live_guarded")
     live_snapshot_summary = (live_snapshot or {}).get("summary") or {}
     live_wallet_balance = safe_float(live_snapshot_summary.get("wallet_balance_usdt"), 0.0)
@@ -10487,6 +10520,81 @@ def assert_no_exchange_open_orders(mode: str) -> dict[str, Any]:
     return check
 
 
+def summarize_binance_position(position: dict[str, Any]) -> dict[str, Any]:
+    amount = position.get("positionAmt")
+    if amount is None:
+        amount = position.get("pa")
+    return {
+        "symbol": position.get("symbol") or position.get("s") or "",
+        "position_amt": str(amount if amount is not None else "0"),
+        "position_side": position.get("positionSide") or position.get("ps") or "BOTH",
+        "entry_price": position.get("entryPrice") or position.get("ep") or "",
+        "break_even_price": position.get("breakEvenPrice") or "",
+        "mark_price": position.get("markPrice") or position.get("mp") or "",
+        "unrealized_pnl": position.get("unRealizedProfit") or position.get("up") or "",
+        "leverage": position.get("leverage") or "",
+        "isolated": coerce_binance_bool(position.get("isolated")),
+        "notional": position.get("notional") or "",
+        "update_time": position.get("updateTime") or "",
+    }
+
+
+def exchange_account_snapshot_from_report(report: dict[str, Any], mode: str) -> dict[str, Any] | None:
+    normalized = str(mode or "").lower().strip()
+    for item in report.get("account_snapshots") or []:
+        if isinstance(item, dict) and item.get("mode") == normalized:
+            return item
+    return None
+
+
+def exchange_positions_check(
+    mode: str,
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized = str(mode or "paper").lower().strip()
+    if normalized not in STATEFUL_EXCHANGE_ORDER_MODES:
+        return {
+            "status": "pass",
+            "mode": normalized,
+            "open_position_count": 0,
+            "positions": [],
+            "skipped": True,
+            "detail": "纸交易或 /order/test 验证模式不会提交真实状态订单，跳过交易所遗留持仓检查。",
+        }
+    current = snapshot or sync_exchange_account_snapshot(normalized)
+    positions = [
+        summarize_binance_position(item)
+        for item in (current.get("positions") or [])
+        if isinstance(item, dict) and abs(safe_float(item.get("positionAmt", item.get("pa", 0)), 0.0)) > 0
+    ]
+    summary = current.get("summary") or {}
+    summary_count = int(safe_float(summary.get("open_position_count"), len(positions)))
+    count = max(summary_count, len(positions))
+    status = "fail" if count else "pass"
+    return {
+        "status": status,
+        "mode": normalized,
+        "snapshot_id": current.get("id"),
+        "snapshot_ts": current.get("ts"),
+        "open_position_count": count,
+        "positions": positions[:20],
+        "summary": summary,
+        "skipped": False,
+        "detail": (
+            "交易所账户当前没有遗留持仓，可继续进行本次受控下单。"
+            if status == "pass"
+            else f"交易所账户存在 {count} 个非零持仓；必须先平仓、对账或迁移到账本后才能提交新的状态订单。"
+        ),
+    }
+
+
+def assert_no_exchange_positions(mode: str) -> dict[str, Any]:
+    check = exchange_positions_check(mode)
+    if check["status"] != "pass":
+        raise ValueError(f"Exchange position gate blocks stateful submission: {check['detail']}")
+    return check
+
+
 def coerce_binance_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -10775,6 +10883,7 @@ def persist_order(order: dict[str, Any]) -> dict[str, Any]:
             "market_freshness": order.get("market_freshness"),
             "order_conflict_check": order.get("order_conflict_check"),
             "exchange_open_order_check": order.get("exchange_open_order_check"),
+            "exchange_position_check": order.get("exchange_position_check"),
             "protection_geometry": order.get("protection_geometry"),
         },
     )
@@ -10872,6 +10981,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         return None
     order_conflict_check = assert_no_stateful_order_conflicts(mode, intent["symbol"])
     exchange_open_order_check = assert_no_exchange_open_orders(mode)
+    exchange_position_check = assert_no_exchange_positions(mode)
     order_account_state = risk.get("account") or account_state_for_mode(mode)
     account_freshness = assert_fresh_execution_account_state(mode, order_account_state)
     market_freshness = assert_fresh_execution_market_snapshot(mode, risk.get("market"))
@@ -10883,6 +10993,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
         order["exchange_open_order_check"] = exchange_open_order_check
+        order["exchange_position_check"] = exchange_position_check
         order["status"] = "paper_filled"
         order["venue_status"] = "PAPER_FILLED"
         persist_order(order)
@@ -10897,6 +11008,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
         order["exchange_open_order_check"] = exchange_open_order_check
+        order["exchange_position_check"] = exchange_position_check
         params = binance_order_params(order, mode)
         validation = validate_binance_order_bundle(order, params, mode)
         order["status"] = "testnet_validated"
@@ -10915,6 +11027,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
         order["exchange_open_order_check"] = exchange_open_order_check
+        order["exchange_position_check"] = exchange_position_check
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)
         order["leverage_sync"] = ensure_binance_leverage(order, mode)
@@ -10997,6 +11110,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order["market_freshness"] = market_freshness
         order["order_conflict_check"] = order_conflict_check
         order["exchange_open_order_check"] = exchange_open_order_check
+        order["exchange_position_check"] = exchange_position_check
         order["go_live_gate"] = go_live_gate
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)

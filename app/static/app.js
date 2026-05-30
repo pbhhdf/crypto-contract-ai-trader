@@ -893,6 +893,10 @@ function renderExchangeRecovery(recovery) {
     (total, item) => total + Number(item.open_order_count || 0),
     0,
   );
+  const exchangePositionCount = (recovery.snapshots || []).reduce(
+    (total, snapshot) => total + Number(snapshot.summary?.open_position_count || 0),
+    0,
+  );
   const warnings = report.warnings || [];
   const errors = report.errors || [];
   els.exchangeRecoveryStatus.textContent = errors.length
@@ -924,6 +928,10 @@ function renderExchangeRecovery(recovery) {
     <article>
       <span>交易所挂单</span>
       <strong>${fmt(openOrderCount)}</strong>
+    </article>
+    <article>
+      <span>交易所持仓</span>
+      <strong>${fmt(exchangePositionCount)}</strong>
     </article>
     <article>
       <span>私有事件</span>
