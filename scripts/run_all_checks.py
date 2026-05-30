@@ -208,6 +208,7 @@ def main() -> int:
                 "scripts/run_guarded_live_pilot_once.py",
                 "scripts/check_guarded_live_pilot_runner.py",
                 "scripts/check_live_protection_guard.py",
+                "scripts/check_protection_unknown_submit.py",
                 "scripts/check_pre_submit_order_tests.py",
                 "scripts/check_protection_geometry.py",
                 "scripts/check_execution_market_freshness.py",
@@ -284,6 +285,7 @@ def main() -> int:
     steps.append(run_step("live_launch_plan", [PYTHON, "scripts/check_live_launch_plan.py"], timeout=30))
     steps.append(run_step("live_ops_handoff", [PYTHON, "scripts/check_live_ops_handoff.py"], timeout=30))
     steps.append(run_step("live_protection_guard", [PYTHON, "scripts/check_live_protection_guard.py"], timeout=60))
+    steps.append(run_step("protection_unknown_submit", [PYTHON, "scripts/check_protection_unknown_submit.py"], timeout=60))
     steps.append(run_step("pre_submit_order_tests", [PYTHON, "scripts/check_pre_submit_order_tests.py"], timeout=30))
     steps.append(run_step("protection_geometry", [PYTHON, "scripts/check_protection_geometry.py"], timeout=30))
     steps.append(run_step("execution_market_freshness", [PYTHON, "scripts/check_execution_market_freshness.py"], timeout=30))

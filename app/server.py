@@ -9898,6 +9898,86 @@ def protection_order_record(
     }
 
 
+def should_track_unknown_binance_submit(exc: Exception) -> bool:
+    if isinstance(exc, HTTPError):
+        return int(getattr(exc, "code", 0) or 0) >= 500
+    return True
+
+
+def persist_unknown_protection_order(
+    parent_order: dict[str, Any],
+    params: dict[str, Any],
+    evidence: dict[str, Any],
+    mode: str,
+    exc: Exception,
+) -> dict[str, Any]:
+    prefix = "live" if mode == "live_guarded" else "testnet"
+    protection_kind = str(evidence.get("protection_kind") or "")
+    order_id = str(params["newClientOrderId"])
+    error_summary = f"{exc.__class__.__name__}: {exc}"
+    note = (
+        f"Protective {protection_kind or 'order'} submit returned an unknown state before a "
+        "venue response was recorded; reconcile or cancel by clientOrderId before retrying. "
+        f"Error: {error_summary}"
+    )
+    payload = {
+        "mode": mode,
+        "parent_order_id": parent_order.get("id"),
+        "client_order_id": order_id,
+        "protection_kind": protection_kind,
+        "params": params,
+        "evidence": evidence,
+        "error_type": exc.__class__.__name__,
+        "error": str(exc),
+    }
+    existing = get_order(order_id)
+    if existing:
+        return update_order_state(
+            order_id,
+            status=existing.get("status") or f"{prefix}_protection_submitted",
+            venue_status=existing.get("venue_status") or "UNKNOWN",
+            reconcile_status="needs_reconcile",
+            reconcile_note=note,
+            reason="binance_protection_submit_unknown",
+            payload=payload,
+        )
+
+    now = utc_now()
+    protection = {
+        "id": order_id,
+        "run_id": parent_order["run_id"],
+        "symbol": parent_order["symbol"],
+        "side": params["side"],
+        "order_type": params["type"],
+        "quantity": parent_order["quantity"],
+        "leverage": parent_order["leverage"],
+        "entry_price": float(params["stopPrice"]),
+        "stop_loss": parent_order["stop_loss"],
+        "take_profit": parent_order["take_profit"],
+        "status": f"{prefix}_protection_submitted",
+        "client_order_id": order_id,
+        "venue_order_id": "",
+        "venue_status": "UNKNOWN",
+        "reconcile_status": "needs_reconcile",
+        "reconcile_note": note,
+        "last_reconciled_at": None,
+        "created_at": now,
+        "updated_at": now,
+        "parent_order_id": parent_order["id"],
+        "protection_kind": protection_kind,
+        "binance_filter_evidence": evidence,
+    }
+    persist_order(protection)
+    insert_order_transition(
+        order_id,
+        protection["status"],
+        protection["status"],
+        "binance_protection_submit_unknown",
+        payload,
+    )
+    return get_order(order_id) or protection
+
+
 def validate_binance_protection_orders(
     order: dict[str, Any],
     mode: str,
@@ -9940,7 +10020,12 @@ def submit_binance_protection_orders(parent_order: dict[str, Any], mode: str) ->
     submitted: list[dict[str, Any]] = []
     for kind in ("stop_loss", "take_profit"):
         params, evidence = binance_protection_order_params(parent_order, kind, mode)
-        response = signed_binance_request_for_mode("POST", "/fapi/v1/order", params, mode)
+        try:
+            response = signed_binance_request_for_mode("POST", "/fapi/v1/order", params, mode)
+        except Exception as exc:
+            if should_track_unknown_binance_submit(exc):
+                persist_unknown_protection_order(parent_order, params, evidence, mode, exc)
+            raise
         protection = protection_order_record(parent_order, params, evidence, mode, response)
         persist_order(protection)
         submitted.append(protection)
@@ -10059,6 +10144,21 @@ def handle_binance_protection_submit_failure(
                 "kind": child.get("protection_kind"),
                 "previous_status": child.get("status"),
             }
+            child_status = str(child.get("status") or "")
+            child_venue_status = str(child.get("venue_status") or "").upper()
+            if child_status not in CANCELABLE_BINANCE_ORDER_STATUSES:
+                if child_status.endswith("_protection_canceled") or child_venue_status in {"CANCELED", "EXPIRED", "REJECTED"}:
+                    attempt.update(
+                        {
+                            "status": "skipped",
+                            "reason": "already_terminal",
+                            "new_status": child_status,
+                            "venue_status": child_venue_status,
+                            "reconcile_status": child.get("reconcile_status"),
+                        }
+                    )
+                    guard["protection_cancel_attempts"].append(attempt)
+                    continue
             try:
                 canceled_child = cancel_testnet_order(str(child["id"]))
                 attempt.update(
