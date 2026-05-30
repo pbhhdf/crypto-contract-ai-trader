@@ -259,6 +259,7 @@ def main() -> int:
                 "scripts/check_restore_state.py",
                 "scripts/check_preflight_live_profile.py",
                 "scripts/check_server_deploy_profile.py",
+                "scripts/check_auth_rate_limit.py",
                 "scripts/export_go_live_report.py",
                 "scripts/export_server_bundle.py",
                 "scripts/run_testnet_drill_until_ready.py",
@@ -275,6 +276,7 @@ def main() -> int:
     steps.append(run_step("preflight", [PYTHON, "scripts/preflight.py"], timeout=45))
     steps.append(run_step("preflight_live_profile", [PYTHON, "scripts/check_preflight_live_profile.py"], timeout=60))
     steps.append(run_step("server_deploy_profile", [PYTHON, "scripts/check_server_deploy_profile.py"], timeout=30))
+    steps.append(run_step("auth_rate_limit", [PYTHON, "scripts/check_auth_rate_limit.py"], timeout=30))
     steps.append(run_step("live_env_profile", [PYTHON, "scripts/check_live_env_profile.py"], timeout=30))
     steps.append(run_step("live_launch_plan", [PYTHON, "scripts/check_live_launch_plan.py"], timeout=30))
     steps.append(run_step("live_ops_handoff", [PYTHON, "scripts/check_live_ops_handoff.py"], timeout=30))

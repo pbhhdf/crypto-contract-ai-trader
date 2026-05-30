@@ -180,6 +180,9 @@ ACCOUNT_EQUITY_USDT = float(os.getenv("ACCOUNT_EQUITY_USDT", "10000"))
 APP_BASIC_AUTH_USER = os.getenv("APP_BASIC_AUTH_USER", "").strip()
 APP_BASIC_AUTH_PASSWORD = os.getenv("APP_BASIC_AUTH_PASSWORD", "").strip()
 AUTH_ENABLED = bool(APP_BASIC_AUTH_USER and APP_BASIC_AUTH_PASSWORD)
+AUTH_FAILURE_LIMIT = env_int("AUTH_FAILURE_LIMIT", 8, 1, 100)
+AUTH_FAILURE_WINDOW_SECONDS = env_int("AUTH_FAILURE_WINDOW_SECONDS", 300, 30, 86_400)
+AUTH_LOCKOUT_SECONDS = env_int("AUTH_LOCKOUT_SECONDS", 900, 30, 86_400)
 TRADER_BIND_IP = os.getenv("TRADER_BIND_IP", "127.0.0.1").strip()
 AI_OPERATOR_ENABLED = env_bool("AI_OPERATOR_ENABLED", True)
 AI_OPERATOR_PROVIDER = os.getenv("AI_OPERATOR_PROVIDER", AI_PROVIDER).lower().strip()
@@ -258,6 +261,8 @@ STATEFUL_EXCHANGE_ORDER_MODES = {"binance_testnet_place_order", "live_guarded"}
 SCHEDULER_STOP = threading.Event()
 TESTNET_DRILL_STOP = threading.Event()
 USER_STREAM_LOCK = threading.Lock()
+AUTH_LOCK = threading.Lock()
+AUTH_FAILURES: dict[str, dict[str, Any]] = {}
 USER_STREAM_STOP = threading.Event()
 USER_STREAM_THREAD: threading.Thread | None = None
 SERVER_LIVE_READINESS_LOCK = threading.Lock()
@@ -359,6 +364,59 @@ def seconds_until(value: str | None) -> float | None:
     if not parsed:
         return None
     return (parsed - datetime.now(timezone.utc)).total_seconds()
+
+
+def auth_attempt_key(_header: str, client_ip: str) -> str:
+    return client_ip or "unknown"
+
+
+def basic_auth_header_matches(header: str) -> bool:
+    expected_raw = f"{APP_BASIC_AUTH_USER}:{APP_BASIC_AUTH_PASSWORD}".encode("utf-8")
+    expected = "Basic " + base64.b64encode(expected_raw).decode("ascii")
+    return hmac.compare_digest(header, expected)
+
+
+def evaluate_basic_auth(header: str, client_ip: str, now: float | None = None) -> dict[str, Any]:
+    if not AUTH_ENABLED:
+        return {"ok": True, "locked": False, "retry_after_seconds": 0}
+    timestamp = time.time() if now is None else now
+    key = auth_attempt_key(header, client_ip)
+    with AUTH_LOCK:
+        state = AUTH_FAILURES.setdefault(key, {"failures": [], "locked_until": 0.0})
+        failures = [
+            item
+            for item in state.get("failures", [])
+            if timestamp - float(item) <= AUTH_FAILURE_WINDOW_SECONDS
+        ]
+        state["failures"] = failures
+        locked_until = float(state.get("locked_until") or 0.0)
+        if locked_until > timestamp:
+            return {
+                "ok": False,
+                "locked": True,
+                "retry_after_seconds": max(1, math.ceil(locked_until - timestamp)),
+                "failure_count": len(failures),
+            }
+        if basic_auth_header_matches(header):
+            AUTH_FAILURES.pop(key, None)
+            return {"ok": True, "locked": False, "retry_after_seconds": 0, "failure_count": 0}
+        failures.append(timestamp)
+        state["failures"] = failures
+        if len(failures) >= AUTH_FAILURE_LIMIT:
+            locked_until = timestamp + AUTH_LOCKOUT_SECONDS
+            state["locked_until"] = locked_until
+            return {
+                "ok": False,
+                "locked": True,
+                "retry_after_seconds": AUTH_LOCKOUT_SECONDS,
+                "failure_count": len(failures),
+            }
+        return {
+            "ok": False,
+            "locked": False,
+            "retry_after_seconds": 0,
+            "failure_count": len(failures),
+        }
 
 
 def connect() -> sqlite3.Connection:
@@ -13000,19 +13058,22 @@ class Handler(SimpleHTTPRequestHandler):
         return json.loads(raw or "{}")
 
     def is_authorized(self) -> bool:
-        if not AUTH_ENABLED:
-            return True
         header = self.headers.get("Authorization", "")
-        expected_raw = f"{APP_BASIC_AUTH_USER}:{APP_BASIC_AUTH_PASSWORD}".encode("utf-8")
-        expected = "Basic " + base64.b64encode(expected_raw).decode("ascii")
-        return hmac.compare_digest(header, expected)
+        client_ip = self.client_address[0] if self.client_address else "unknown"
+        self._auth_result = evaluate_basic_auth(header, client_ip)
+        return bool(self._auth_result.get("ok"))
 
     def require_auth(self) -> bool:
         if self.is_authorized():
             return True
-        self.send_response(HTTPStatus.UNAUTHORIZED)
+        result = getattr(self, "_auth_result", {}) or {}
+        locked = bool(result.get("locked"))
+        self.send_response(HTTPStatus.TOO_MANY_REQUESTS if locked else HTTPStatus.UNAUTHORIZED)
         self.send_header("WWW-Authenticate", 'Basic realm="Crypto Contract AI Trader"')
+        if locked:
+            self.send_header("Retry-After", str(int(result.get("retry_after_seconds") or AUTH_LOCKOUT_SECONDS)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", "0")
         self.end_headers()
         return False
 
