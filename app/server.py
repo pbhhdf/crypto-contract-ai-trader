@@ -4825,6 +4825,107 @@ def cancel_child_protections_for_terminal_parent(
     return attempts
 
 
+def cancel_sibling_protections_for_filled_child(
+    child_order: dict[str, Any],
+    mode: str,
+    trigger: str,
+    child_venue_status: str,
+    payload: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    parent_order_id = str(child_order.get("parent_order_id") or "")
+    child_order_id = str(child_order.get("id") or "")
+    if not parent_order_id or not child_order_id:
+        return []
+    venue_status = str(child_venue_status or "").upper()
+    filled_quantity = parent_terminal_fill_quantity(payload)
+    if venue_status != "FILLED" and filled_quantity <= 0:
+        return []
+
+    attempts: list[dict[str, Any]] = []
+    for sibling in get_child_protection_orders(parent_order_id):
+        sibling_id = str(sibling.get("id") or "")
+        if not sibling_id or sibling_id == child_order_id:
+            continue
+        attempt = {
+            "order_id": sibling_id,
+            "kind": sibling.get("protection_kind"),
+            "previous_status": sibling.get("status"),
+            "trigger": trigger,
+            "filled_child_order_id": child_order_id,
+            "filled_child_kind": child_order.get("protection_kind"),
+            "filled_child_venue_status": venue_status,
+            "filled_child_quantity": filled_quantity,
+        }
+        sibling_status = str(sibling.get("status") or "")
+        sibling_venue_status = str(sibling.get("venue_status") or "").upper()
+        if sibling_status not in CANCELABLE_BINANCE_ORDER_STATUSES:
+            if sibling_status.endswith("_protection_canceled") or sibling_venue_status in {"CANCELED", "EXPIRED", "REJECTED"}:
+                attempt.update(
+                    {
+                        "status": "skipped",
+                        "reason": "already_terminal",
+                        "new_status": sibling_status,
+                        "venue_status": sibling_venue_status,
+                        "reconcile_status": sibling.get("reconcile_status"),
+                    }
+                )
+            else:
+                attempt.update({"status": "skipped", "reason": "sibling_order_not_cancelable"})
+        else:
+            try:
+                canceled_sibling = cancel_testnet_order(sibling_id)
+                attempt.update(
+                    {
+                        "status": "canceled",
+                        "new_status": canceled_sibling.get("status"),
+                        "venue_status": canceled_sibling.get("venue_status"),
+                        "reconcile_status": canceled_sibling.get("reconcile_status"),
+                    }
+                )
+            except Exception as sibling_exc:  # noqa: BLE001 - surface all sibling cleanup failures.
+                attempt.update(
+                    {
+                        "status": "failed",
+                        "error_type": sibling_exc.__class__.__name__,
+                        "error": str(sibling_exc),
+                    }
+                )
+        attempts.append(attempt)
+
+    if not attempts:
+        return []
+    insert_order_transition(
+        child_order_id,
+        child_order.get("status"),
+        child_order.get("status", "terminal"),
+        "binance_sibling_protection_cancel_after_child_fill",
+        {
+            "trigger": trigger,
+            "parent_order_id": parent_order_id,
+            "child_venue_status": venue_status,
+            "child_executed_quantity": filled_quantity,
+            "attempts": attempts,
+            "payload": payload or {},
+        },
+    )
+    failed_siblings = [item for item in attempts if item.get("status") == "failed"]
+    if failed_siblings:
+        prefix = "live" if mode == "live_guarded" else "testnet"
+        raise_alert(
+            f"protection.cancel_sibling_after_child_fill_failed.{child_order_id}",
+            "critical",
+            "OMS",
+            f"Binance {prefix} sibling protection cancel failed",
+            (
+                f"Protection order {child_order_id} filled via {trigger}, but "
+                f"{len(failed_siblings)} sibling protection order(s) could not be canceled automatically. "
+                "Manual venue review is required."
+            ),
+            {"child_order": child_order, "attempts": attempts, "trigger": trigger, "payload": payload or {}},
+        )
+    return attempts
+
+
 def insert_order_transition(
     order_id: str,
     from_status: str | None,
@@ -5017,8 +5118,17 @@ def reconcile_order(order_id: str) -> dict[str, Any]:
                 venue_status,
                 {"response": response},
             )
+            sibling_attempts = cancel_sibling_protections_for_filled_child(
+                updated,
+                order_mode,
+                "binance_order_reconcile",
+                venue_status,
+                {"response": response},
+            )
             if child_attempts:
                 updated["child_protection_cancel_attempts"] = child_attempts
+            if sibling_attempts:
+                updated["sibling_protection_cancel_attempts"] = sibling_attempts
             return updated
         except Exception as exc:
             return update_order_state(
@@ -10573,6 +10683,18 @@ def handle_private_order_update(mode: str, event: dict[str, Any]) -> tuple[bool,
         venue_status,
         {"event": event},
     )
+    sibling_attempts = cancel_sibling_protections_for_filled_child(
+        updated,
+        mode,
+        "binance_private_order_update",
+        venue_status,
+        {"event": event},
+    )
+    if sibling_attempts:
+        return True, (
+            f"Updated local order {updated['id']} from private stream; "
+            f"sibling protection child-fill actions={len(sibling_attempts)}."
+        )
     if child_attempts:
         return True, (
             f"Updated local order {updated['id']} from private stream; "
