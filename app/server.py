@@ -11076,6 +11076,12 @@ def close_paper_position(position_id: str, reason: str = "manual_close") -> dict
 def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mode: str) -> dict[str, Any] | None:
     if intent["side"] == "HOLD" or risk["status"] == "rejected":
         return None
+    if mode in STATEFUL_EXCHANGE_ORDER_MODES and risk["status"] != "approved":
+        risk["execution_blocked_reason"] = (
+            f"{mode_label(mode)} requires risk status approved before a stateful exchange order; "
+            f"current risk status is {risk['status']}."
+        )
+        return None
     order_conflict_check = assert_no_stateful_order_conflicts(mode, intent["symbol"])
     exchange_open_order_check = assert_no_exchange_open_orders(mode)
     exchange_position_check = assert_no_exchange_positions(mode)
@@ -11447,13 +11453,22 @@ def run_workflow(run_id: str) -> None:
                     },
                 )
         else:
+            blocked_reason = risk.get("execution_blocked_reason")
             insert_event(
                 run_id,
                 "order",
                 "Order Executor",
                 "未提交订单",
-                "由于动作是观望或风控拒绝，本次工作流未产生订单。",
-                {"action": intent["side"], "risk_status": risk["status"]},
+                (
+                    blocked_reason
+                    if blocked_reason
+                    else "由于动作是观望或风控拒绝，本次工作流未产生订单。"
+                ),
+                {
+                    "action": intent["side"],
+                    "risk_status": risk["status"],
+                    "execution_blocked_reason": blocked_reason,
+                },
             )
         update_run(run_id, status="completed")
         insert_event(

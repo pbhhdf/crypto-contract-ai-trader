@@ -31,6 +31,7 @@ This first version is intentionally conservative:
 - Alert delivery can send opened/resolved alerts to Webhook, Telegram, and SMTP email channels and records every delivery attempt for audit.
 - The Testnet drill panel can schedule repeated Binance Testnet validation/placement rehearsals, then run OMS recovery, alert checks, and private-stream health summaries for each auditable cycle.
 - The Go-live gate now blocks `live_guarded` order execution unless explicit live flags, risk limits, OMS reconciliation, alert health, recovery sync, live private stream, Testnet drill cycles, and backtest/walk-forward checks all pass.
+- Stateful exchange execution now requires deterministic risk status `approved`; paper mode can still rehearse warning paths, but real Testnet placement and `live_guarded` do not submit orders on risk warnings.
 - Even after the Go-live gate passes, live order execution requires a short-lived `ARM_LIVE_TRADING` authorization from the UI/API; the authorization expires automatically and has a per-arming entry-order budget.
 - Binance orders are normalized against exchange `exchangeInfo` filters before signed submission, and live/testnet placement submits audited STOP_MARKET / TAKE_PROFIT_MARKET close-position protection orders.
 - Paper mode sizes orders from the local ledger; Binance testnet/live modes size orders from the synced exchange account equity/free-margin snapshot and record that source in the audit trail.
