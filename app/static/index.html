@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard18" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard19" />
   </head>
   <body>
     <header class="topbar">
@@ -53,6 +53,39 @@
         <button class="view-tab" data-view-target="evidence">证据</button>
         <button class="view-tab" data-view-target="research">架构</button>
       </nav>
+
+      <section class="overview-grid">
+        <article class="overview-card">
+          <span>实盘门禁</span>
+          <strong id="overview-live-status">锁定中</strong>
+          <small id="overview-live-detail">未武装，真实订单禁用</small>
+        </article>
+        <article class="overview-card">
+          <span>部署就绪</span>
+          <strong id="overview-readiness-status">检查中</strong>
+          <small id="overview-readiness-detail">等待检查项汇总</small>
+        </article>
+        <article class="overview-card">
+          <span>告警</span>
+          <strong id="overview-alert-status">正常</strong>
+          <small id="overview-alert-detail">暂无活跃告警</small>
+        </article>
+        <article class="overview-card">
+          <span>OMS</span>
+          <strong id="overview-oms-status">-</strong>
+          <small id="overview-oms-detail">等待对账统计</small>
+        </article>
+        <article class="overview-card">
+          <span>Testnet 演练</span>
+          <strong id="overview-testnet-status">已暂停</strong>
+          <small id="overview-testnet-detail">等待演练进度</small>
+        </article>
+        <article class="overview-card">
+          <span>审计链</span>
+          <strong id="overview-audit-status">等待检查</strong>
+          <small id="overview-audit-detail">等待哈希链汇总</small>
+        </article>
+      </section>
 
       <section class="system-grid">
         <article class="system-card status-card">

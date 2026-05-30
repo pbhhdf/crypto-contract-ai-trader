@@ -97,6 +97,18 @@ const els = {
   aiModel: document.querySelector("#ai-model"),
   aiReady: document.querySelector("#ai-ready"),
   aiFallback: document.querySelector("#ai-fallback"),
+  overviewLiveStatus: document.querySelector("#overview-live-status"),
+  overviewLiveDetail: document.querySelector("#overview-live-detail"),
+  overviewReadinessStatus: document.querySelector("#overview-readiness-status"),
+  overviewReadinessDetail: document.querySelector("#overview-readiness-detail"),
+  overviewAlertStatus: document.querySelector("#overview-alert-status"),
+  overviewAlertDetail: document.querySelector("#overview-alert-detail"),
+  overviewOmsStatus: document.querySelector("#overview-oms-status"),
+  overviewOmsDetail: document.querySelector("#overview-oms-detail"),
+  overviewTestnetStatus: document.querySelector("#overview-testnet-status"),
+  overviewTestnetDetail: document.querySelector("#overview-testnet-detail"),
+  overviewAuditStatus: document.querySelector("#overview-audit-status"),
+  overviewAuditDetail: document.querySelector("#overview-audit-detail"),
   aiOperatorStatus: document.querySelector("#ai-operator-status"),
   aiOperatorBoundary: document.querySelector("#ai-operator-boundary"),
   aiOperatorMessages: document.querySelector("#ai-operator-messages"),
@@ -272,7 +284,7 @@ let goLiveGateLoadedAt = 0;
 const activeViewStorageKey = "cryptoTrader.activeView";
 
 const viewGroups = {
-  overview: [".account-grid", ".metrics-grid", ".system-grid"],
+  overview: [".overview-grid", ".account-grid", ".metrics-grid", ".system-grid"],
   ai: [".ai-operator-panel"],
   live: [".live-gate-panel"],
   trading: [".workflow-workspace", ".intent-workspace", ".positions-panel", ".orders-panel"],
@@ -713,6 +725,10 @@ function renderReadiness(readiness) {
   if (!readiness) {
     els.readinessOverall.textContent = "-";
     els.readinessList.innerHTML = "";
+    if (els.overviewReadinessStatus) {
+      els.overviewReadinessStatus.textContent = "-";
+      els.overviewReadinessDetail.textContent = "尚未读取就绪检查";
+    }
     return;
   }
   const overallMap = {
@@ -721,6 +737,13 @@ function renderReadiness(readiness) {
     fail: "需要处理",
   };
   els.readinessOverall.textContent = overallMap[readiness.overall] || readiness.overall || "-";
+  if (els.overviewReadinessStatus) {
+    const items = readiness.items || [];
+    const failCount = items.filter((item) => item.status === "fail").length;
+    const warnCount = items.filter((item) => item.status === "warn").length;
+    els.overviewReadinessStatus.textContent = overallMap[readiness.overall] || readiness.overall || "-";
+    els.overviewReadinessDetail.textContent = `${fmt(items.length)} 项 / 失败 ${fmt(failCount)} / 警告 ${fmt(warnCount)}`;
+  }
   const badgeClass = {
     pass: "pass",
     warn: "warn",
@@ -745,6 +768,10 @@ function renderAuditChain(audit) {
     els.auditChainBroken.textContent = "-";
     els.auditChainHash.textContent = "-";
     els.auditChainRecent.innerHTML = "";
+    if (els.overviewAuditStatus) {
+      els.overviewAuditStatus.textContent = "-";
+      els.overviewAuditDetail.textContent = "尚未读取审计链";
+    }
     return;
   }
   const ok = audit.status === "pass" && Number(audit.total_records || 0) > 0;
@@ -754,6 +781,10 @@ function renderAuditChain(audit) {
   els.auditChainHash.textContent = audit.last_hash && audit.last_hash !== "GENESIS"
     ? `${audit.last_hash.slice(0, 18)}...`
     : "-";
+  if (els.overviewAuditStatus) {
+    els.overviewAuditStatus.textContent = ok ? "完整" : "需要检查";
+    els.overviewAuditDetail.textContent = `记录 ${fmt(audit.total_records || 0)} / 断裂 ${fmt(audit.broken_count || 0)}`;
+  }
   const recent = audit.recent || [];
   els.auditChainRecent.innerHTML = recent.length
     ? recent.slice(-6).map((item) => `
@@ -823,6 +854,16 @@ function renderAlerts(alertState) {
   } else {
     els.alertStatus.textContent = summary.critical ? "需要处理" : "需要关注";
     els.alertSummary.textContent = `活跃 ${fmt(summary.active)} / 严重 ${fmt(summary.critical)} / 警告 ${fmt(summary.warning)} / 已确认 ${fmt(summary.acknowledged)}`;
+  }
+  if (els.overviewAlertStatus) {
+    els.overviewAlertStatus.textContent = summary.active
+      ? summary.critical
+        ? "需要处理"
+        : "需要关注"
+      : "正常";
+    els.overviewAlertDetail.textContent = summary.active
+      ? `活跃 ${fmt(summary.active)} / 严重 ${fmt(summary.critical)} / 警告 ${fmt(summary.warning)}`
+      : "暂无活跃告警";
   }
   const minSeverity = alertSeverityText(delivery.min_severity || "warning");
   const readyChannels = (delivery.channels || [])
@@ -1060,6 +1101,10 @@ function renderTestnetDrill(drill) {
     els.testnetDrillNext.textContent = "-";
     els.testnetDrillError.textContent = "-";
     els.testnetDrillCycles.innerHTML = "";
+    if (els.overviewTestnetStatus) {
+      els.overviewTestnetStatus.textContent = "已暂停";
+      els.overviewTestnetDetail.textContent = "尚未配置演练";
+    }
     return;
   }
   const availableModes = drill.available_modes || ["binance_testnet_validate"];
@@ -1072,6 +1117,11 @@ function renderTestnetDrill(drill) {
     : drill.enabled
       ? "已启用"
       : "已暂停";
+  if (els.overviewTestnetStatus) {
+    els.overviewTestnetStatus.textContent = els.testnetDrillStatus.textContent;
+    els.overviewTestnetDetail.textContent =
+      `真实 ${fmt(drill.real_completed_cycles || 0)}/${fmt(drill.target_cycles)} / dry-run ${fmt(drill.dry_run_completed_cycles || 0)}`;
+  }
   if (!testnetDrillDirty) {
     els.testnetDrillEnabled.checked = Boolean(drill.enabled);
     els.testnetDrillSymbol.value = drill.symbol || "BTCUSDT";
@@ -1161,6 +1211,10 @@ function renderGoLiveGate(gate) {
     els.liveGateSummary.textContent = "尚未读取准入状态";
     els.liveGateFacts.innerHTML = "";
     els.liveGateList.innerHTML = "";
+    if (els.overviewLiveStatus) {
+      els.overviewLiveStatus.textContent = "锁定中";
+      els.overviewLiveDetail.textContent = "未读取门禁状态";
+    }
     renderLiveAttestation(null);
     return;
   }
@@ -1177,6 +1231,14 @@ function renderGoLiveGate(gate) {
     : arming.armed
       ? `实盘已短时授权，剩余 ${fmt(arming.remaining_seconds)} 秒，入口额度 ${fmt(arming.remaining_orders)}/${fmt(arming.max_orders)}；仍有 ${fmt(blockers.length)} 个阻塞项。`
       : `仍有 ${fmt(blockers.length)} 个阻塞项；未通过并武装前 live_guarded 不会真实下单。`;
+  if (els.overviewLiveStatus) {
+    els.overviewLiveStatus.textContent = statusMap[gate.status] || gate.status || "-";
+    els.overviewLiveDetail.textContent = gate.ready_for_live_order
+      ? "满足真实订单条件"
+      : arming.armed
+        ? `已武装，剩余 ${fmt(arming.remaining_seconds)} 秒 / 阻塞 ${fmt(blockers.length)}`
+        : `未武装 / 阻塞 ${fmt(blockers.length)}`;
+  }
   els.liveGateFacts.innerHTML = `
     <article>
       <span>实盘模式</span>
@@ -2403,6 +2465,10 @@ function renderOms(oms) {
   const unknown = Number(data.unknown_venue_status || 0);
   els.omsNeeds.style.color = needs > 0 ? "#a76505" : "#10845b";
   els.omsUnknown.style.color = unknown > 0 ? "#cf2e2e" : "#10845b";
+  if (els.overviewOmsStatus) {
+    els.overviewOmsStatus.textContent = needs || unknown ? "需要对账" : "正常";
+    els.overviewOmsDetail.textContent = `订单 ${fmt(data.total_orders)} / 已对账 ${fmt(data.reconciled_orders)} / 未知 ${fmt(unknown)}`;
+  }
 }
 
 function renderPositions(positions, account) {
