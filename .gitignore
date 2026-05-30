@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*secret*
+*SECRET*
+
+# Runtime state, databases, snapshots, and exports
+data/
+reports/
+*.db
+*.sqlite
+*.sqlite3
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Logs and OS/editor noise
+*.log
+logs/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

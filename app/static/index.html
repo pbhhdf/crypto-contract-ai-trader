@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>加密合约 AI 交易工作台</title>
+    <link rel="stylesheet" href="/styles.css?v=20260531-workbench" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">本地纸交易控制台</p>
+        <h1>加密货币合约 AI 交易工作台</h1>
+      </div>
+      <div class="status-pill" id="system-status">连接中</div>
+    </header>
+
+    <main class="shell">
+      <section class="control-band">
+        <div class="control-group">
+          <label for="symbol">交易对</label>
+          <select id="symbol">
+            <option value="BTCUSDT">BTCUSDT 永续</option>
+            <option value="ETHUSDT">ETHUSDT 永续</option>
+            <option value="SOLUSDT">SOLUSDT 永续</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="mode">模式</label>
+          <select id="mode">
+            <option value="paper">本地纸交易</option>
+          </select>
+        </div>
+        <button id="start-run" class="primary">启动一次分析</button>
+        <button id="stop" class="danger">紧急停止</button>
+        <button id="panic-stop" class="danger">事故停机+撤单</button>
+        <button id="reset-stop" class="secondary">解除停止</button>
+      </section>
+
+      <nav class="view-switcher" aria-label="工作台视图">
+        <button class="view-tab active" data-view-target="overview">总览</button>
+        <button class="view-tab" data-view-target="ai">AI 操作员</button>
+        <button class="view-tab" data-view-target="live">实盘门禁</button>
+        <button class="view-tab" data-view-target="trading">交易流</button>
+        <button class="view-tab" data-view-target="risk">风控</button>
+        <button class="view-tab" data-view-target="backtest">回测</button>
+        <button class="view-tab" data-view-target="ops">运维</button>
+        <button class="view-tab" data-view-target="evidence">证据</button>
+        <button class="view-tab" data-view-target="research">架构</button>
+      </nav>
+
+      <section class="system-grid">
+        <article class="system-card">
+          <span>AI 提供方</span>
+          <strong id="ai-provider">本地规则</strong>
+          <small id="ai-model">确定性规则 v1</small>
+        </article>
+        <article class="system-card">
+          <span>AI 状态</span>
+          <strong id="ai-ready">-</strong>
+          <small id="ai-fallback">-</small>
+        </article>
+        <article class="system-card">
+          <span>行情来源</span>
+          <strong id="market-source">-</strong>
+          <small id="enabled-modes">-</small>
+        </article>
+        <article class="system-card">
+          <span>交易所边界</span>
+          <strong id="exchange-mode">本地纸交易</strong>
+          <small id="testnet-status">-</small>
+        </article>
+      </section>
+
+      <section class="panel readiness-panel">
+        <div class="panel-heading">
+          <h2>部署就绪检查</h2>
+          <span id="readiness-overall">检查中</span>
+        </div>
+        <div id="readiness-list" class="readiness-list"></div>
+      </section>
+
+      <section class="panel audit-chain-panel">
+        <div class="panel-heading">
+          <h2>审计哈希链</h2>
+          <span id="audit-chain-status">等待检查</span>
+        </div>
+        <div class="audit-chain-summary">
+          <article>
+            <span>链上记录</span>
+            <strong id="audit-chain-total">-</strong>
+          </article>
+          <article>
+            <span>断裂记录</span>
+            <strong id="audit-chain-broken">-</strong>
+          </article>
+          <article>
+            <span>最后哈希</span>
+            <strong id="audit-chain-hash">-</strong>
+          </article>
+        </div>
+        <div id="audit-chain-recent" class="guidance-grid"></div>
+      </section>
+
+      <section class="panel alert-panel">
+        <div class="panel-heading">
+          <h2>告警中心</h2>
+          <span id="alert-status">等待检查</span>
+        </div>
+        <div class="alert-actions">
+          <button id="run-alert-check" class="secondary">立即检查</button>
+          <button id="test-alert-delivery" class="secondary">测试通知</button>
+          <span id="alert-summary">暂无告警</span>
+        </div>
+        <div id="alert-delivery-status" class="alert-delivery-status">通知配置读取中</div>
+        <div id="alert-list" class="alert-list"></div>
+        <div id="alert-deliveries" class="alert-deliveries"></div>
+      </section>
+
+      <section class="panel exchange-recovery-panel">
+        <div class="panel-heading">
+          <h2>交易所恢复同步</h2>
+          <span id="exchange-recovery-status">等待同步</span>
+        </div>
+        <div class="exchange-recovery-actions">
+          <div class="control-group">
+            <label for="exchange-sync-mode">同步环境</label>
+            <select id="exchange-sync-mode">
+              <option value="binance_testnet_validate">Binance Testnet 验证</option>
+              <option value="binance_testnet_place_order">Binance Testnet 下单</option>
+              <option value="live_guarded">Binance 实盘保护</option>
+            </select>
+          </div>
+          <button id="run-exchange-recovery" class="secondary">立即恢复对账</button>
+          <button id="sync-exchange-account" class="secondary">同步账户快照</button>
+          <button id="plan-flatten-positions" class="secondary">生成平仓预案</button>
+          <button id="start-user-stream" class="secondary">启动私有流</button>
+          <button id="keepalive-user-stream" class="secondary">保活私有流</button>
+          <button id="close-user-stream" class="secondary">关闭私有流</button>
+        </div>
+        <div id="exchange-recovery-facts" class="recovery-facts"></div>
+        <div id="exchange-snapshots" class="guidance-grid"></div>
+      </section>
+
+      <section class="panel ai-operator-panel">
+        <div class="panel-heading">
+          <h2>AI 操作员</h2>
+          <span id="ai-operator-status">等待连接</span>
+        </div>
+        <p id="ai-operator-boundary" class="muted-text"></p>
+        <div class="ai-operator-layout">
+          <div id="ai-operator-messages" class="ai-operator-messages"></div>
+          <div class="ai-operator-controls">
+            <textarea id="ai-operator-input" rows="4" placeholder="告诉 AI 操作员要检查或修改什么，也可以输入 /readiness、/go-live、/resolve-live-blockers、/final-live-ready、/server-readiness、/server-readiness-run、/handoff、/launch-kit、/env-pack、/live-postflight、/panic-stop --confirm PANIC_STOP、/bundle、/list、/read、/write、/patch、/shell"></textarea>
+            <div class="ai-operator-actions">
+              <button id="send-ai-operator" class="primary">发送给 AI</button>
+              <span id="ai-operator-permissions">权限读取中</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel scheduler-panel">
+        <div class="panel-heading">
+          <h2>自动调度</h2>
+          <span id="scheduler-status">已暂停</span>
+        </div>
+        <div class="scheduler-controls">
+          <label class="toggle-row" for="scheduler-enabled">
+            <input id="scheduler-enabled" type="checkbox" />
+            <span>启用</span>
+          </label>
+          <div class="control-group">
+            <label for="scheduler-symbol">交易对</label>
+            <select id="scheduler-symbol">
+              <option value="BTCUSDT">BTCUSDT</option>
+              <option value="ETHUSDT">ETHUSDT</option>
+              <option value="SOLUSDT">SOLUSDT</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="scheduler-interval">间隔分钟</label>
+            <input id="scheduler-interval" type="number" min="1" max="1440" step="1" value="15" />
+          </div>
+          <button id="save-scheduler" class="secondary">保存调度</button>
+          <button id="run-scheduler-now" class="primary">立即运行</button>
+        </div>
+        <div class="scheduler-facts">
+          <article>
+            <span>上次运行</span>
+            <strong id="scheduler-last">-</strong>
+          </article>
+          <article>
+            <span>下次运行</span>
+            <strong id="scheduler-next">-</strong>
+          </article>
+          <article>
+            <span>最近错误</span>
+            <strong id="scheduler-error">-</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel testnet-drill-panel">
+        <div class="panel-heading">
+          <h2>Testnet 演练</h2>
+          <span id="testnet-drill-status">已暂停</span>
+        </div>
+        <div class="testnet-drill-controls">
+          <label class="toggle-row" for="testnet-drill-enabled">
+            <input id="testnet-drill-enabled" type="checkbox" />
+            <span>启用</span>
+          </label>
+          <div class="control-group">
+            <label for="testnet-drill-symbol">交易对</label>
+            <select id="testnet-drill-symbol">
+              <option value="BTCUSDT">BTCUSDT</option>
+              <option value="ETHUSDT">ETHUSDT</option>
+              <option value="SOLUSDT">SOLUSDT</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="testnet-drill-mode">模式</label>
+            <select id="testnet-drill-mode">
+              <option value="binance_testnet_validate">Binance Testnet 验证</option>
+              <option value="binance_testnet_place_order">Binance Testnet 下单</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="testnet-drill-interval">间隔分钟</label>
+            <input id="testnet-drill-interval" type="number" min="1" max="1440" step="1" value="30" />
+          </div>
+          <div class="control-group">
+            <label for="testnet-drill-target">目标次数</label>
+            <input id="testnet-drill-target" type="number" min="1" max="10000" step="1" value="24" />
+          </div>
+          <button id="save-testnet-drill" class="secondary">保存演练</button>
+          <button id="run-testnet-drill-now" class="primary">立即演练</button>
+        </div>
+        <div class="testnet-drill-facts">
+          <article>
+            <span>进度</span>
+            <strong id="testnet-drill-progress">-</strong>
+          </article>
+          <article>
+            <span>上次演练</span>
+            <strong id="testnet-drill-last">-</strong>
+          </article>
+          <article>
+            <span>下次演练</span>
+            <strong id="testnet-drill-next">-</strong>
+          </article>
+          <article>
+            <span>最近错误</span>
+            <strong id="testnet-drill-error">-</strong>
+          </article>
+        </div>
+        <div id="testnet-drill-cycles" class="guidance-grid"></div>
+      </section>
+
+      <section class="panel live-gate-panel">
+        <div class="panel-heading">
+          <h2>实盘准入门禁</h2>
+          <span id="live-gate-status">锁定中</span>
+        </div>
+        <div class="live-gate-actions">
+          <button id="check-live-gate" class="secondary">立即检查门禁</button>
+          <button id="export-go-live-report" class="secondary">导出准入报告</button>
+          <button id="export-live-launch-plan" class="secondary">导出上线计划</button>
+          <button id="export-live-ops-handoff" class="secondary">导出实盘交接单</button>
+          <button id="export-live-launch-kit" class="secondary">导出上线套件</button>
+          <button id="export-live-env-pack" class="secondary">导出环境模板</button>
+          <button id="export-server-bundle" class="secondary">导出部署包</button>
+          <button id="export-server-go-live-audit" class="secondary">导出服务器审计包</button>
+          <button id="check-final-live-ready" class="secondary">最终实盘检查</button>
+          <button id="run-server-live-readiness" class="primary">启动准入推进器</button>
+          <label class="toggle-row compact-toggle" for="server-live-readiness-testnet">
+            <input id="server-live-readiness-testnet" type="checkbox" />
+            <span>包含真实 Testnet</span>
+          </label>
+          <div class="control-group compact-control">
+            <label for="live-arm-confirmation">授权短语</label>
+            <input id="live-arm-confirmation" type="text" placeholder="ARM_LIVE_TRADING" />
+          </div>
+          <div class="control-group compact-control">
+            <label for="live-arm-ttl">授权分钟</label>
+            <input id="live-arm-ttl" type="number" min="1" max="1440" step="1" value="10" />
+          </div>
+          <div class="control-group live-arm-reason">
+            <label for="live-arm-reason">原因</label>
+            <input id="live-arm-reason" type="text" value="manual live readiness check" />
+          </div>
+          <button id="arm-live-gate" class="danger">武装实盘</button>
+          <button id="disarm-live-gate" class="secondary">解除武装</button>
+          <div class="control-group compact-control">
+            <label for="live-pilot-confirmation">首单确认短语</label>
+            <input id="live-pilot-confirmation" type="text" placeholder="LAUNCH_LIVE_PILOT" />
+          </div>
+          <button id="check-live-pilot" class="secondary">检查首单执行器</button>
+          <button id="run-live-pilot" class="danger" disabled>提交实盘首单</button>
+          <button id="check-live-postflight" class="secondary">检查首单复盘</button>
+          <button id="resolve-live-blockers" class="secondary">生成解除路线</button>
+          <span id="live-gate-summary">等待读取准入状态</span>
+        </div>
+        <div class="live-pilot-panel">
+          <div class="panel-heading small-heading">
+            <h3>实盘首单执行器</h3>
+            <span id="live-pilot-status">未检查</span>
+          </div>
+          <p id="live-pilot-summary" class="muted-text">只在最终实盘检查、短时武装和确认短语同时满足时提交一次实盘保护模式工作流。</p>
+          <div id="live-pilot-list" class="guardrail-list"></div>
+        </div>
+        <div class="live-pilot-panel">
+          <div class="panel-heading small-heading">
+            <h3>实盘首单复盘</h3>
+            <span id="live-postflight-status">未检查</span>
+          </div>
+          <p id="live-postflight-summary" class="muted-text">提交首单后检查 OMS、告警、审计链、交易所快照和解除武装状态。</p>
+          <div id="live-postflight-list" class="guardrail-list"></div>
+        </div>
+        <div class="live-pilot-panel">
+          <div class="panel-heading small-heading">
+            <h3>实盘阻塞解除路线</h3>
+            <span id="live-blocker-status">未生成</span>
+          </div>
+          <p id="live-blocker-summary" class="muted-text">把当前实盘阻塞项翻译成服务器环境变量、命令和验收证据。</p>
+          <div id="live-blocker-list" class="guardrail-list"></div>
+        </div>
+        <div class="testnet-drill-facts">
+          <article>
+            <span>准入推进器</span>
+            <strong id="server-live-readiness-status">-</strong>
+          </article>
+          <article>
+            <span>开始时间</span>
+            <strong id="server-live-readiness-started">-</strong>
+          </article>
+          <article>
+            <span>报告路径</span>
+            <strong id="server-live-readiness-report">-</strong>
+          </article>
+          <article>
+            <span>剩余阻塞</span>
+            <strong id="server-live-readiness-blockers">-</strong>
+          </article>
+        </div>
+        <div id="server-live-readiness-evidence" class="evidence-chip-grid"></div>
+        <div class="live-env-profile-panel">
+          <div class="panel-heading small-heading">
+            <h3>服务器环境剖面</h3>
+            <button id="check-live-env-profile" class="secondary">审计环境</button>
+          </div>
+          <div class="testnet-drill-facts">
+            <article>
+              <span>剖面状态</span>
+              <strong id="live-env-profile-status">-</strong>
+            </article>
+            <article>
+              <span>目标阶段</span>
+              <strong id="live-env-profile-target">-</strong>
+            </article>
+            <article>
+              <span>缺失变量</span>
+              <strong id="live-env-profile-missing">-</strong>
+            </article>
+            <article>
+              <span>下一步</span>
+              <strong id="live-env-profile-next">-</strong>
+            </article>
+          </div>
+          <div id="live-env-profile-list" class="guidance-grid"></div>
+        </div>
+        <div class="live-attestation-panel">
+          <div class="panel-heading small-heading">
+            <h3>实盘人工证据</h3>
+            <span id="live-attestation-status">未确认</span>
+          </div>
+          <div class="attestation-checks">
+            <label><input id="attest-withdrawal-disabled" type="checkbox" /> 实盘 API 密钥已关闭提现权限</label>
+            <label><input id="attest-ip-whitelisted" type="checkbox" /> 实盘 API 密钥已绑定服务器出口 IP</label>
+            <label><input id="attest-jurisdiction-ok" type="checkbox" /> 所在地区与交易所条款允许当前用途</label>
+            <label><input id="attest-offserver-backup-copied" type="checkbox" /> 最新备份和准入报告已复制到服务器外部</label>
+            <label><input id="attest-pilot-capital-limit-ok" type="checkbox" /> 小额试运行资金与单笔名义上限已确认</label>
+          </div>
+          <div class="attestation-actions">
+            <div class="control-group compact-control">
+              <label for="live-attestation-actor">确认人</label>
+              <input id="live-attestation-actor" type="text" value="dashboard" />
+            </div>
+            <div class="control-group compact-control">
+              <label for="live-attestation-confirmation">确认短语</label>
+              <input id="live-attestation-confirmation" type="text" placeholder="LIVE_ATTESTATION_CONFIRMED" />
+            </div>
+            <div class="control-group attestation-note">
+              <label for="live-attestation-note">备注</label>
+              <input id="live-attestation-note" type="text" placeholder="备份位置、IP 白名单截图位置或审批记录编号" />
+            </div>
+            <button id="save-live-attestation" class="secondary">保存证据</button>
+            <button id="clear-live-attestation" class="secondary">清除证据</button>
+          </div>
+          <div id="live-attestation-list" class="guidance-grid"></div>
+        </div>
+        <div id="live-gate-facts" class="live-gate-facts"></div>
+        <div id="final-live-ready" class="final-live-ready"></div>
+        <div id="live-gate-list" class="guidance-grid"></div>
+      </section>
+
+      <section class="metrics-grid">
+        <article class="metric">
+          <span>运行状态</span>
+          <strong id="run-status">未启动</strong>
+        </article>
+        <article class="metric">
+          <span>最终动作</span>
+          <strong id="final-action">-</strong>
+        </article>
+        <article class="metric">
+          <span>风控结果</span>
+          <strong id="risk-status">-</strong>
+        </article>
+        <article class="metric">
+          <span>环境</span>
+          <strong id="environment">本地 / 本地纸交易</strong>
+        </article>
+      </section>
+
+      <section class="account-grid">
+        <article class="metric account">
+          <span>纸交易权益</span>
+          <strong id="account-equity">-</strong>
+        </article>
+        <article class="metric account">
+          <span>可用保证金</span>
+          <strong id="free-margin">-</strong>
+        </article>
+        <article class="metric account">
+          <span>未实现 PnL</span>
+          <strong id="unrealized-pnl">-</strong>
+        </article>
+        <article class="metric account">
+          <span>总敞口</span>
+          <strong id="gross-exposure">-</strong>
+        </article>
+      </section>
+
+      <section class="panel risk-panel">
+        <div class="panel-heading">
+          <h2>风控中心</h2>
+          <span id="risk-center-status">正常</span>
+        </div>
+        <div class="risk-controls">
+          <div class="control-group">
+            <label for="risk-max-leverage">最大杠杆</label>
+            <input id="risk-max-leverage" type="number" min="1" max="125" step="1" value="3" />
+          </div>
+          <div class="control-group">
+            <label for="risk-max-position">单笔仓位 %</label>
+            <input id="risk-max-position" type="number" min="0.1" max="100" step="0.1" value="5" />
+          </div>
+          <div class="control-group">
+            <label for="risk-max-notional">单笔名义 USDT</label>
+            <input id="risk-max-notional" type="number" min="0" max="100000000" step="10" value="1000" />
+          </div>
+          <div class="control-group">
+            <label for="risk-daily-loss">日亏损 %</label>
+            <input id="risk-daily-loss" type="number" min="0" max="100" step="0.1" value="3" />
+          </div>
+          <div class="control-group">
+            <label for="risk-max-open">最大持仓</label>
+            <input id="risk-max-open" type="number" min="0" max="200" step="1" value="8" />
+          </div>
+          <div class="control-group">
+            <label for="risk-loss-streak">连续亏损</label>
+            <input id="risk-loss-streak" type="number" min="0" max="100" step="1" value="3" />
+          </div>
+          <div class="control-group risk-symbols">
+            <label for="risk-symbols">允许交易对</label>
+            <input id="risk-symbols" type="text" value="BTCUSDT,ETHUSDT,SOLUSDT" />
+          </div>
+          <button id="save-risk" class="secondary">保存风控</button>
+          <button id="risk-stop" class="danger">紧急停止</button>
+          <button id="risk-panic-stop" class="danger">事故停机+撤单</button>
+          <button id="risk-reset" class="secondary">解除停止</button>
+        </div>
+        <div class="risk-facts">
+          <article>
+            <span>紧急停止</span>
+            <strong id="risk-emergency">-</strong>
+          </article>
+          <article>
+            <span>当前持仓</span>
+            <strong id="risk-open-positions">-</strong>
+          </article>
+          <article>
+            <span>今日 PnL</span>
+            <strong id="risk-daily-pnl">-</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel backtest-panel">
+        <div class="panel-heading">
+          <h2>回测实验室</h2>
+          <span id="backtest-id">暂无回测</span>
+        </div>
+        <div class="backtest-controls">
+          <select id="backtest-symbol">
+            <option value="BTCUSDT">BTCUSDT</option>
+            <option value="ETHUSDT">ETHUSDT</option>
+            <option value="SOLUSDT">SOLUSDT</option>
+          </select>
+          <select id="backtest-interval">
+            <option value="15m">15m</option>
+            <option value="1h">1h</option>
+            <option value="4h">4h</option>
+          </select>
+          <select id="backtest-bars">
+            <option value="160">160 根K线</option>
+            <option value="240" selected>240 根K线</option>
+            <option value="500">500 根K线</option>
+          </select>
+          <button id="run-backtest" class="secondary">运行回测</button>
+          <button id="run-compare" class="secondary">参数比较</button>
+          <button id="run-walkforward" class="secondary">滚动验证</button>
+        </div>
+        <div class="backtest-grid">
+          <article class="metric">
+            <span>收益率</span>
+            <strong id="backtest-return">-</strong>
+          </article>
+          <article class="metric">
+            <span>胜率</span>
+            <strong id="backtest-win-rate">-</strong>
+          </article>
+          <article class="metric">
+            <span>最大回撤</span>
+            <strong id="backtest-drawdown">-</strong>
+          </article>
+          <article class="metric">
+            <span>交易数</span>
+            <strong id="backtest-trades-count">-</strong>
+          </article>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>开仓时间</th>
+                <th>平仓时间</th>
+                <th>交易对</th>
+                <th>方向</th>
+                <th>入场</th>
+                <th>出场</th>
+                <th>数量</th>
+                <th>PnL</th>
+                <th>收益率</th>
+                <th>原因</th>
+              </tr>
+            </thead>
+            <tbody id="backtest-trades"></tbody>
+          </table>
+        </div>
+        <div class="panel-heading subheading">
+          <h2>参数排行榜</h2>
+          <span id="compare-id">暂无参数比较</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>排名</th>
+                <th>快/慢均线</th>
+                <th>止损/止盈</th>
+                <th>阈值</th>
+                <th>评分</th>
+                <th>收益率</th>
+                <th>回撤</th>
+                <th>胜率</th>
+                <th>交易数</th>
+                <th>盈亏比</th>
+              </tr>
+            </thead>
+            <tbody id="compare-results"></tbody>
+          </table>
+        </div>
+        <div class="panel-heading subheading">
+          <h2>滚动样本外验证</h2>
+          <span id="walkforward-id">暂无滚动验证</span>
+        </div>
+        <div class="backtest-grid">
+          <article class="metric">
+            <span>样本外收益</span>
+            <strong id="walkforward-return">-</strong>
+          </article>
+          <article class="metric">
+            <span>正收益折数</span>
+            <strong id="walkforward-positive">-</strong>
+          </article>
+          <article class="metric">
+            <span>样本外回撤</span>
+            <strong id="walkforward-drawdown">-</strong>
+          </article>
+          <article class="metric">
+            <span>样本外交易数</span>
+            <strong id="walkforward-trades">-</strong>
+          </article>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>折次</th>
+                <th>测试窗口</th>
+                <th>参数</th>
+                <th>训练收益</th>
+                <th>测试收益</th>
+                <th>测试回撤</th>
+                <th>胜率</th>
+                <th>交易数</th>
+              </tr>
+            </thead>
+            <tbody id="walkforward-folds"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="workspace workflow-workspace">
+        <div class="panel panel-large">
+          <div class="panel-heading">
+            <h2>代理工作流</h2>
+            <span id="run-id">无运行</span>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </div>
+
+        <aside class="panel">
+          <div class="panel-heading">
+            <h2>最新市场快照</h2>
+          </div>
+          <dl id="market-snapshot" class="kv-list"></dl>
+        </aside>
+      </section>
+
+      <section class="panel research-panel">
+        <div class="panel-heading">
+          <h2>研究工件与治理边界</h2>
+          <span id="research-status">等待运行</span>
+        </div>
+        <p id="research-summary" class="event-body"></p>
+        <div id="research-protocol" class="research-protocol"></div>
+        <div id="research-artifacts" class="research-grid"></div>
+        <div id="research-guardrails" class="guardrail-list"></div>
+      </section>
+
+      <section class="panel architecture-panel">
+        <div class="panel-heading">
+          <h2>生产架构蓝图</h2>
+          <span id="architecture-status">当前版本对照</span>
+        </div>
+        <p id="architecture-summary" class="event-body"></p>
+        <div id="executive-summary" class="executive-summary-grid"></div>
+        <div class="subsection-heading">
+          <h3>项目目标与假设</h3>
+          <span>默认约束</span>
+        </div>
+        <div id="project-default-target" class="tooling-list"></div>
+        <p id="project-assumption-reasoning" class="muted-text"></p>
+        <div class="table-wrap assumption-defaults-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>未指定项</th>
+                <th>当前状态</th>
+                <th>可选方案</th>
+                <th>适用场景</th>
+                <th>推荐默认</th>
+              </tr>
+            </thead>
+            <tbody id="assumption-defaults"></tbody>
+          </table>
+        </div>
+        <div class="subsection-heading compact">
+          <h3>合规分层与交易所选择</h3>
+          <span>起步边界</span>
+        </div>
+        <div id="compliance-tiers" class="guidance-grid"></div>
+        <div id="exchange-selection" class="guidance-grid"></div>
+        <div class="subsection-heading">
+          <h3>参考项目拆解</h3>
+          <span>代理边界</span>
+        </div>
+        <div id="anthropic-reference-premise" class="tooling-list"></div>
+        <div id="anthropic-reference-layers" class="guidance-grid"></div>
+        <div id="anthropic-reference-boundaries" class="tooling-list"></div>
+        <div id="market-researcher-guardrails" class="tooling-list"></div>
+        <div class="table-wrap agent-sdk-capabilities-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>代理能力</th>
+                <th>生产价值</th>
+                <th>MVP 边界</th>
+              </tr>
+            </thead>
+            <tbody id="agent-sdk-capabilities"></tbody>
+          </table>
+        </div>
+        <div class="subsection-heading compact">
+          <h3>交易代理参考项目拆解</h3>
+          <span>研究公司原型</span>
+        </div>
+        <div id="tradingagents-positioning" class="tooling-list"></div>
+        <div class="table-wrap tradingagents-roles-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>角色</th>
+                <th>团队</th>
+                <th>职责</th>
+              </tr>
+            </thead>
+            <tbody id="tradingagents-roles"></tbody>
+          </table>
+        </div>
+        <div id="tradingagents-flow" class="flow-steps"></div>
+        <div id="tradingagents-communication" class="tooling-list"></div>
+        <div id="tradingagents-runtime" class="tooling-list"></div>
+        <div id="tradingagents-limitations" class="guidance-grid"></div>
+        <div class="subsection-heading compact">
+          <h3>两类参考综合吸收点</h3>
+          <span>研究治理框架</span>
+        </div>
+        <div id="reference-architecture-paths" class="guidance-grid"></div>
+        <div id="reference-absorb-points" class="guidance-grid"></div>
+        <div id="reference-implementation-rule" class="tooling-list"></div>
+        <div class="subsection-heading compact">
+          <h3>推荐分层架构</h3>
+          <span>四平面目标图</span>
+        </div>
+        <div id="layered-architecture-summary" class="tooling-list"></div>
+        <div id="layered-architecture-planes" class="architecture-grid"></div>
+        <div id="venue-adapter-rule" class="tooling-list"></div>
+        <div id="strategy-engine-split" class="guidance-grid"></div>
+        <div class="table-wrap architecture-graph-nodes-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>节点</th>
+                <th>名称</th>
+                <th>平面</th>
+              </tr>
+            </thead>
+            <tbody id="architecture-graph-nodes"></tbody>
+          </table>
+        </div>
+        <div id="architecture-graph-edges" class="flow-steps"></div>
+        <div id="architecture-principles" class="guardrail-list"></div>
+        <div id="architecture-planes" class="architecture-grid"></div>
+        <div class="table-wrap architecture-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>目标组件</th>
+                <th>平面</th>
+                <th>状态</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody id="architecture-components"></tbody>
+          </table>
+        </div>
+        <div class="subsection-heading compact">
+          <h3>关键模块定义</h3>
+          <span>职责与生产化要点</span>
+        </div>
+        <p id="module-definition-summary" class="muted-text"></p>
+        <div class="table-wrap module-definition-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>模块</th>
+                <th>建议职责</th>
+                <th>生产化要点</th>
+              </tr>
+            </thead>
+            <tbody id="module-definition-table"></tbody>
+          </table>
+        </div>
+        <div id="module-matrix" class="module-grid"></div>
+        <div class="subsection-heading">
+          <h3>自动交易系统实现注意事项</h3>
+          <span>工程边界</span>
+        </div>
+        <p id="implementation-note-summary" class="muted-text"></p>
+        <div class="table-wrap implementation-note-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>主题</th>
+                <th>文档依据</th>
+                <th>工程建议</th>
+              </tr>
+            </thead>
+            <tbody id="implementation-note-table"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap implementation-notes-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>主题</th>
+                <th>状态</th>
+                <th>文档依据</th>
+                <th>当前控制</th>
+                <th>下一步</th>
+                <th>工程建议</th>
+              </tr>
+            </thead>
+            <tbody id="implementation-notes"></tbody>
+          </table>
+        </div>
+        <div class="subsection-heading">
+          <h3>关键数据流与实体关系</h3>
+          <span>可回放链路</span>
+        </div>
+        <p id="entity-summary" class="event-body"></p>
+        <p id="entity-focus" class="muted-text"></p>
+        <pre id="entity-mermaid" class="mermaid-source"></pre>
+        <div id="entity-list" class="entity-grid"></div>
+        <div class="table-wrap relationship-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>来源</th>
+                <th>关系</th>
+                <th>目标</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody id="entity-relationships"></tbody>
+          </table>
+        </div>
+        <div class="subsection-heading">
+          <h3>控制台信息架构</h3>
+          <span>运营工作台</span>
+        </div>
+        <p id="ui-ia-summary" class="event-body"></p>
+        <p id="ui-ia-root" class="muted-text"></p>
+        <pre id="ui-navigation-tree" class="tree-source"></pre>
+        <div id="ui-navigation" class="ui-nav-grid"></div>
+        <p id="ui-page-component-summary" class="muted-text"></p>
+        <div class="table-wrap ui-pages-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>页面</th>
+                <th>必备组件</th>
+                <th>设计重点</th>
+              </tr>
+            </thead>
+            <tbody id="ui-page-components"></tbody>
+          </table>
+        </div>
+        <div id="ui-tooling" class="tooling-list"></div>
+        <div class="subsection-heading">
+          <h3>交互流程、响应式与图表建议</h3>
+          <span>发布闭环</span>
+        </div>
+        <p id="interaction-flow-summary" class="event-body"></p>
+        <div id="interaction-flow-steps" class="flow-steps"></div>
+        <div class="subsection-heading compact">
+          <h3>主交互闭环</h3>
+          <span>证据到复盘</span>
+        </div>
+        <div id="main-loop-steps" class="flow-steps"></div>
+        <div id="responsive-guidance" class="guidance-grid"></div>
+        <div id="chart-guidance" class="guidance-grid"></div>
+        <div class="subsection-heading">
+          <h3>技术栈与实施路线</h3>
+          <span>标准版路径</span>
+        </div>
+        <p id="technical-summary" class="event-body"></p>
+        <div id="technical-principles" class="tooling-list"></div>
+        <div class="table-wrap technical-stack-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>层</th>
+                <th>推荐</th>
+                <th>是否首选</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody id="technical-stack"></tbody>
+          </table>
+        </div>
+        <div id="api-priority" class="tooling-list"></div>
+        <div class="table-wrap roadmap-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>阶段</th>
+                <th>目标</th>
+                <th>核心交付物</th>
+                <th>估算人力</th>
+                <th>估算周期</th>
+              </tr>
+            </thead>
+            <tbody id="implementation-roadmap"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap scale-comparison-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th>MVP</th>
+                <th>标准</th>
+                <th>企业级</th>
+              </tr>
+            </thead>
+            <tbody id="scale-comparison"></tbody>
+          </table>
+        </div>
+        <div id="recommended-start" class="tooling-list"></div>
+        <div id="risk-boundary" class="tooling-list"></div>
+        <div class="section-subhead">
+          <span>上线门槛</span>
+          <h3>风险、测试与验收</h3>
+        </div>
+        <p id="testing-principle" class="muted-text"></p>
+        <div class="table-wrap risk-register-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>风险</th>
+                <th>典型表现</th>
+                <th>缓解措施</th>
+              </tr>
+            </thead>
+            <tbody id="risk-register"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap acceptance-matrix-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>类别</th>
+                <th>关键用例</th>
+                <th>最低验收标准</th>
+              </tr>
+            </thead>
+            <tbody id="acceptance-matrix"></tbody>
+          </table>
+        </div>
+        <div id="go-live-gates" class="tooling-list"></div>
+      </section>
+
+      <section class="workspace intent-workspace">
+        <div class="panel">
+          <div class="panel-heading">
+            <h2>交易意图</h2>
+          </div>
+          <div id="trade-intent" class="intent-box empty">等待交易代理输出</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <h2>风控检查</h2>
+          </div>
+          <div id="risk-checks" class="checks empty">等待风控引擎输出</div>
+        </div>
+      </section>
+
+      <section class="panel positions-panel">
+        <div class="panel-heading">
+          <h2>纸交易持仓</h2>
+          <span id="position-summary">暂无持仓</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>持仓</th>
+                <th>运行</th>
+                <th>交易对</th>
+                <th>方向</th>
+                <th>数量</th>
+                <th>杠杆</th>
+                <th>入场</th>
+                <th>标记价</th>
+                <th>保证金</th>
+                <th>PnL</th>
+                <th>ROE</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="positions"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel orders-panel">
+        <div class="panel-heading">
+          <h2>订单对账</h2>
+          <button id="reconcile-orders" class="secondary">执行对账</button>
+        </div>
+        <div class="oms-facts">
+          <article>
+            <span>订单总数</span>
+            <strong id="oms-total">-</strong>
+          </article>
+          <article>
+            <span>已对账</span>
+            <strong id="oms-reconciled">-</strong>
+          </article>
+          <article>
+            <span>待复核</span>
+            <strong id="oms-needs">-</strong>
+          </article>
+          <article>
+            <span>未知交易所状态</span>
+            <strong id="oms-unknown">-</strong>
+          </article>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>订单</th>
+                <th>客户订单号</th>
+                <th>运行</th>
+                <th>交易对</th>
+                <th>方向</th>
+                <th>数量</th>
+                <th>杠杆</th>
+                <th>入场</th>
+                <th>止损</th>
+                <th>止盈</th>
+                <th>状态</th>
+                <th>交易所状态</th>
+                <th>对账</th>
+                <th>说明</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="orders"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel raw-log-panel">
+        <div class="panel-heading">
+          <h2>原始事件详情</h2>
+          <span>用于复盘提示词、数据、风控和订单流</span>
+        </div>
+        <pre id="raw-log" class="raw-log">{}</pre>
+      </section>
+    </main>
+
+    <script src="/app.js?v=20260531-workbench"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+# The app intentionally keeps the stack small; the single runtime dependency is
+# used by the Binance private user-data stream consumer.
+websockets>=15.0,<16
+
+# Future integrations will add:
+# fastapi
+# uvicorn
+# langgraph
+# langchain
+# ccxt
+# pandas
