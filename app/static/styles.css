@@ -21,8 +21,7 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: Inter, "Segoe UI", Arial, sans-serif;
-  background:
-    linear-gradient(180deg, #eef3f9 0, #f8fafc 48%, #f3f6fa 100%);
+  background: #f5f7fb;
   color: var(--ink);
 }
 
@@ -38,11 +37,11 @@ textarea {
   justify-content: space-between;
   gap: 18px;
   align-items: center;
-  padding: 14px 28px;
-  background: #121722;
+  padding: 12px 28px;
+  background: #111827;
   color: #fff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
 }
 
 .brand-block {
@@ -63,7 +62,7 @@ h2 {
 }
 
 h1 {
-  font-size: 21px;
+  font-size: 20px;
   line-height: 1.15;
 }
 
@@ -104,8 +103,8 @@ h2 {
 }
 
 .shell {
-  width: min(1440px, calc(100% - 40px));
-  margin: 12px auto 16px;
+  width: min(1480px, calc(100% - 32px));
+  margin: 10px auto 16px;
 }
 
 .view-switcher {
@@ -131,7 +130,7 @@ h2 {
 }
 
 .view-tab {
-  min-height: 32px;
+  min-height: 34px;
   padding: 0 14px;
   white-space: nowrap;
   border-color: transparent;
@@ -156,7 +155,7 @@ h2 {
   display: grid;
   gap: 12px;
   margin-top: 10px;
-  max-height: max(420px, calc(100vh - 250px));
+  max-height: max(420px, calc(100vh - 224px));
   overflow: auto;
   padding-right: 4px;
   scrollbar-gutter: stable;
@@ -167,8 +166,8 @@ h2 {
 }
 
 body[data-active-view="overview"] .view-stage {
-  max-height: none;
-  overflow: visible;
+  max-height: max(420px, calc(100vh - 224px));
+  overflow: auto;
   padding-right: 0;
   gap: 10px;
 }
@@ -199,7 +198,7 @@ body[data-active-view="evidence"] .raw-log-panel {
 
 .view-section.panel,
 .view-section.workspace {
-  max-height: max(420px, calc(100vh - 250px));
+  max-height: max(420px, calc(100vh - 224px));
   overflow: auto;
   scrollbar-gutter: stable;
 }
@@ -221,7 +220,7 @@ body[data-active-view="overview"] .view-section {
 .control-band {
   grid-template-columns: minmax(136px, 0.65fr) minmax(136px, 0.65fr) minmax(0, 2.5fr);
   align-items: end;
-  padding: 10px;
+  padding: 9px;
   gap: 10px;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -257,7 +256,7 @@ select,
 input,
 textarea,
 button {
-  min-height: 40px;
+  min-height: 38px;
   border-radius: 7px;
   border: 1px solid var(--line);
 }
@@ -283,6 +282,9 @@ input[type="checkbox"] {
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 16px;
   cursor: pointer;
   font-weight: 700;
@@ -469,9 +471,9 @@ body[data-active-view="overview"] .account-grid {
 .metric {
   position: relative;
   display: grid;
-  gap: 8px;
-  min-height: 74px;
-  padding: 13px 14px;
+  gap: 7px;
+  min-height: 70px;
+  padding: 12px 14px;
   border-radius: 8px;
   overflow: hidden;
   isolation: isolate;
@@ -487,9 +489,7 @@ body[data-active-view="overview"] .account-grid .metric:first-child strong {
 }
 
 body[data-active-view="overview"] .account-grid .metric:first-child {
-  background:
-    linear-gradient(135deg, rgba(24, 95, 215, 0.08), rgba(16, 132, 91, 0.09)),
-    #fff;
+  background: #f8fbff;
 }
 
 .metric.account strong {
@@ -499,8 +499,8 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 .system-card {
   position: relative;
   display: grid;
-  gap: 6px;
-  min-height: 74px;
+  gap: 5px;
+  min-height: 70px;
   padding: 13px 13px 13px 15px;
   border-radius: 8px;
   overflow: hidden;
@@ -526,18 +526,6 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   background: #94a3b8;
 }
 
-.metric::after,
-.system-card::after {
-  content: "";
-  position: absolute;
-  inset: auto -18px -26px auto;
-  width: 74px;
-  height: 74px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.11);
-  z-index: -1;
-}
-
 .status-card:nth-child(1)::before,
 .state-card::before {
   background: var(--blue);
@@ -558,27 +546,12 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   background: var(--amber);
 }
 
-.metric[data-status="ok"]::before,
-.metric[data-status="ok"]::after {
-  background: rgba(16, 132, 91, 0.18);
-}
-
 .metric[data-status="ok"]::before {
   background: var(--green);
 }
 
-.metric[data-status="danger"]::before,
-.metric[data-status="danger"]::after {
-  background: rgba(207, 46, 46, 0.16);
-}
-
 .metric[data-status="danger"]::before {
   background: var(--red);
-}
-
-.metric[data-status="active"]::before,
-.metric[data-status="active"]::after {
-  background: rgba(24, 95, 215, 0.16);
 }
 
 .metric[data-status="active"]::before {
@@ -775,7 +748,7 @@ body[data-active-view="research"] .architecture-panel {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin: 10px 0 12px;
+  margin: 0 0 6px;
 }
 
 .live-pilot-panel {
@@ -793,7 +766,7 @@ body[data-active-view="research"] .architecture-panel {
 }
 
 .live-pilot-panel .muted-text {
-  min-height: 44px;
+  min-height: 0;
   margin: 0 0 8px;
 }
 
@@ -1851,6 +1824,56 @@ th {
   background: #0f172a;
   color: #dbeafe;
   font-size: 12px;
+}
+
+@media (min-width: 1040px) {
+  .shell {
+    display: grid;
+    grid-template-columns: 176px minmax(0, 1fr);
+    grid-template-areas:
+      "nav controls"
+      "nav stage";
+    gap: 10px 12px;
+    align-items: start;
+  }
+
+  .control-band {
+    grid-area: controls;
+  }
+
+  .view-switcher {
+    grid-area: nav;
+    top: 10px;
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    margin: 0;
+    padding: 8px;
+    max-height: calc(100vh - 20px);
+    overflow: auto;
+  }
+
+  .view-tab {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+    padding: 0 12px;
+  }
+
+  .view-stage {
+    grid-area: stage;
+    margin-top: 0;
+    max-height: calc(100vh - 156px);
+  }
+
+  body[data-active-view="overview"] .view-stage {
+    max-height: calc(100vh - 156px);
+  }
+
+  .view-section.panel,
+  .view-section.workspace {
+    max-height: calc(100vh - 156px);
+  }
 }
 
 @media (max-width: 520px) {

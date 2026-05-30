@@ -269,6 +269,7 @@ let readinessLoading = false;
 let readinessLoadedAt = 0;
 let goLiveGateLoading = false;
 let goLiveGateLoadedAt = 0;
+const activeViewStorageKey = "cryptoTrader.activeView";
 
 const viewGroups = {
   overview: [".account-grid", ".metrics-grid", ".system-grid"],
@@ -301,7 +302,21 @@ function initializeViewSwitcher() {
     switcher.insertAdjacentElement("afterend", stage);
     sections.forEach((section) => stage.appendChild(section));
   }
-  function activate(view) {
+  function storedView() {
+    try {
+      return window.localStorage.getItem(activeViewStorageKey);
+    } catch (error) {
+      return "";
+    }
+  }
+  function rememberView(view) {
+    try {
+      window.localStorage.setItem(activeViewStorageKey, view);
+    } catch (error) {
+      // 浏览器隐私模式可能禁止 localStorage，忽略即可。
+    }
+  }
+  function activate(view, persist = true) {
     const nextView = viewGroups[view] ? view : "overview";
     document.body.dataset.activeView = nextView;
     tabs.forEach((tab) => {
@@ -312,11 +327,21 @@ function initializeViewSwitcher() {
     sections.forEach((section) => {
       section.hidden = section.dataset.view !== nextView;
     });
+    if (persist) {
+      rememberView(nextView);
+      if (window.location.hash !== `#${nextView}`) {
+        window.history.replaceState(null, "", `#${nextView}`);
+      }
+    }
   }
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => activate(tab.dataset.viewTarget || "overview"));
   });
-  activate("overview");
+  const initialView = window.location.hash.replace("#", "") || storedView() || "overview";
+  activate(initialView, false);
+  window.addEventListener("hashchange", () => {
+    activate(window.location.hash.replace("#", "") || "overview", false);
+  });
 }
 
 function fmt(value) {

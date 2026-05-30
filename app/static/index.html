@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard10" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard12" />
   </head>
   <body>
     <header class="topbar">
@@ -338,50 +338,62 @@
             </div>
           </details>
         </div>
-        <div class="live-pilot-grid">
-          <div class="live-pilot-panel">
-            <div class="panel-heading small-heading">
-              <h3>实盘首单执行器</h3>
-              <span id="live-pilot-status">未检查</span>
+        <details class="live-detail-group live-compact-detail">
+          <summary>
+            <span>首单执行、复盘和解除路线</span>
+            <small>展开查看执行器、复盘证据和阻塞解除建议</small>
+          </summary>
+          <div class="live-pilot-grid">
+            <div class="live-pilot-panel">
+              <div class="panel-heading small-heading">
+                <h3>实盘首单执行器</h3>
+                <span id="live-pilot-status">未检查</span>
+              </div>
+              <p id="live-pilot-summary" class="muted-text">只在最终实盘检查、短时武装和确认短语同时满足时提交一次实盘保护模式工作流。</p>
+              <div id="live-pilot-list" class="guardrail-list"></div>
             </div>
-            <p id="live-pilot-summary" class="muted-text">只在最终实盘检查、短时武装和确认短语同时满足时提交一次实盘保护模式工作流。</p>
-            <div id="live-pilot-list" class="guardrail-list"></div>
-          </div>
-          <div class="live-pilot-panel">
-            <div class="panel-heading small-heading">
-              <h3>实盘首单复盘</h3>
-              <span id="live-postflight-status">未检查</span>
+            <div class="live-pilot-panel">
+              <div class="panel-heading small-heading">
+                <h3>实盘首单复盘</h3>
+                <span id="live-postflight-status">未检查</span>
+              </div>
+              <p id="live-postflight-summary" class="muted-text">提交首单后检查 OMS、告警、审计链、交易所快照和解除武装状态。</p>
+              <div id="live-postflight-list" class="guardrail-list"></div>
             </div>
-            <p id="live-postflight-summary" class="muted-text">提交首单后检查 OMS、告警、审计链、交易所快照和解除武装状态。</p>
-            <div id="live-postflight-list" class="guardrail-list"></div>
-          </div>
-          <div class="live-pilot-panel">
-            <div class="panel-heading small-heading">
-              <h3>实盘阻塞解除路线</h3>
-              <span id="live-blocker-status">未生成</span>
+            <div class="live-pilot-panel">
+              <div class="panel-heading small-heading">
+                <h3>实盘阻塞解除路线</h3>
+                <span id="live-blocker-status">未生成</span>
+              </div>
+              <p id="live-blocker-summary" class="muted-text">把当前实盘阻塞项翻译成服务器环境变量、命令和验收证据。</p>
+              <div id="live-blocker-list" class="guardrail-list"></div>
             </div>
-            <p id="live-blocker-summary" class="muted-text">把当前实盘阻塞项翻译成服务器环境变量、命令和验收证据。</p>
-            <div id="live-blocker-list" class="guardrail-list"></div>
           </div>
-        </div>
-        <div class="testnet-drill-facts">
-          <article>
-            <span>准入推进器</span>
-            <strong id="server-live-readiness-status">-</strong>
-          </article>
-          <article>
-            <span>开始时间</span>
-            <strong id="server-live-readiness-started">-</strong>
-          </article>
-          <article>
-            <span>报告路径</span>
-            <strong id="server-live-readiness-report">-</strong>
-          </article>
-          <article>
-            <span>剩余阻塞</span>
-            <strong id="server-live-readiness-blockers">-</strong>
-          </article>
-        </div>
+        </details>
+        <details class="live-detail-group live-compact-detail">
+          <summary>
+            <span>准入推进器状态</span>
+            <small>展开查看启动时间、报告路径和剩余阻塞</small>
+          </summary>
+          <div class="testnet-drill-facts">
+            <article>
+              <span>准入推进器</span>
+              <strong id="server-live-readiness-status">-</strong>
+            </article>
+            <article>
+              <span>开始时间</span>
+              <strong id="server-live-readiness-started">-</strong>
+            </article>
+            <article>
+              <span>报告路径</span>
+              <strong id="server-live-readiness-report">-</strong>
+            </article>
+            <article>
+              <span>剩余阻塞</span>
+              <strong id="server-live-readiness-blockers">-</strong>
+            </article>
+          </div>
+        </details>
         <details class="live-detail-group">
           <summary>
             <span>准入推进器证据</span>
@@ -1173,6 +1185,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard10"></script>
+    <script src="/app.js?v=20260531-dashboard12"></script>
   </body>
 </html>
