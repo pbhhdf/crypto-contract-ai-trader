@@ -147,6 +147,7 @@ BINANCE_MAX_TIME_DRIFT_MS = env_int("BINANCE_MAX_TIME_DRIFT_MS", 1000, 50, 60_00
 PRIVATE_STREAM_STALE_SECONDS = env_int("PRIVATE_STREAM_STALE_SECONDS", 86400, 300, 604800)
 EXCHANGE_RECOVERY_STALE_SECONDS = env_int("EXCHANGE_RECOVERY_STALE_SECONDS", 3600, 300, 86400)
 EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS = env_int("EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS", 30, 1, 3600)
+EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS = env_int("EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS", 60, 1, 3600)
 ALERT_WEBHOOK_ENABLED = env_bool("ALERT_WEBHOOK_ENABLED", False)
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "").strip()
 ALERT_WEBHOOK_SECRET = os.getenv("ALERT_WEBHOOK_SECRET", "").strip()
@@ -251,6 +252,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_LOCK = threading.Lock()
 RUN_LOCK = threading.Lock()
 ACTIVE_RUNS: set[str] = set()
+STATEFUL_EXCHANGE_ORDER_MODES = {"binance_testnet_place_order", "live_guarded"}
 SCHEDULER_STOP = threading.Event()
 TESTNET_DRILL_STOP = threading.Event()
 USER_STREAM_LOCK = threading.Lock()
@@ -8857,10 +8859,71 @@ def assert_fresh_execution_account_state(mode: str, account_state: dict[str, Any
     return freshness
 
 
+def execution_market_freshness(mode: str, snapshot: dict[str, Any] | None) -> dict[str, Any]:
+    normalized = str(mode or "paper").lower().strip()
+    market = snapshot or {}
+    source = str(market.get("data_source") or "").lower().strip()
+    fallback = bool(market.get("fallback"))
+    source_error = str(market.get("source_error") or "").strip()
+    timestamp = str(market.get("timestamp") or "").strip()
+    age = seconds_since(timestamp)
+    mark_price = safe_float(market.get("mark_price"), 0.0)
+    detail = "纸交易或验证模式不提交真实状态订单；行情可用于研究和 payload 校验。"
+    if normalized not in STATEFUL_EXCHANGE_ORDER_MODES:
+        return {
+            "status": "pass",
+            "mode": normalized,
+            "source": source or "-",
+            "fallback": fallback,
+            "source_error": source_error,
+            "timestamp": timestamp,
+            "age_seconds": None if age is None else round(age, 3),
+            "max_age_seconds": EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS,
+            "mark_price": round(mark_price, 8),
+            "detail": detail,
+        }
+
+    failures: list[str] = []
+    if source != "binance_public":
+        failures.append(f"真实下单要求 Binance 公共行情，当前来源为 {source_label(source or '-')}")
+    if fallback:
+        failures.append("行情发生 fallback，禁止用回退数据提交真实订单")
+    if source_error:
+        failures.append(f"行情源错误仍未清除：{source_error}")
+    if age is None:
+        failures.append("行情快照时间无效")
+    elif age > EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS:
+        failures.append(
+            f"行情快照已过期 {age:.1f}s，超过 {EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS}s"
+        )
+    if mark_price <= 0:
+        failures.append("行情标记价格必须大于 0")
+    return {
+        "status": "fail" if failures else "pass",
+        "mode": normalized,
+        "source": source or "-",
+        "fallback": fallback,
+        "source_error": source_error,
+        "timestamp": timestamp,
+        "age_seconds": None if age is None else round(age, 3),
+        "max_age_seconds": EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS,
+        "mark_price": round(mark_price, 8),
+        "detail": "；".join(failures) if failures else "真实下单行情快照新鲜、来源真实，未使用 fallback。",
+    }
+
+
+def assert_fresh_execution_market_snapshot(mode: str, snapshot: dict[str, Any] | None) -> dict[str, Any]:
+    freshness = execution_market_freshness(mode, snapshot)
+    if freshness["status"] != "pass":
+        raise ValueError(f"Execution market snapshot is not fresh: {freshness['detail']}")
+    return freshness
+
+
 def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "paper") -> dict[str, Any]:
     config = risk_config()
     account_state = account_state_for_mode(mode)
     account_freshness = execution_account_freshness(mode, account_state)
+    market_freshness = execution_market_freshness(mode, snapshot)
     equity_base = float(account_state.get("equity_usdt") or ACCOUNT_EQUITY_USDT)
     daily_realized = today_realized_pnl()
     daily_loss_limit = equity_base * config["max_daily_loss_pct"]
@@ -8882,6 +8945,11 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
             "name": "Account snapshot freshness",
             "status": account_freshness["status"],
             "detail": account_freshness["detail"],
+        },
+        {
+            "name": "Market snapshot freshness",
+            "status": market_freshness["status"],
+            "detail": market_freshness["detail"],
         },
         {
             "name": "Mode lock",
@@ -8976,6 +9044,8 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
         "checks": checks,
         "config": config,
         "account": account_state,
+        "market": snapshot,
+        "market_freshness": market_freshness,
     }
 
 
@@ -10321,6 +10391,7 @@ def persist_order(order: dict[str, Any]) -> dict[str, Any]:
             "parent_order_id": order.get("parent_order_id"),
             "protection_kind": order.get("protection_kind"),
             "pre_submit_validation": order.get("pre_submit_validation"),
+            "market_freshness": order.get("market_freshness"),
         },
     )
     return order
@@ -10417,11 +10488,13 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         return None
     order_account_state = risk.get("account") or account_state_for_mode(mode)
     account_freshness = assert_fresh_execution_account_state(mode, order_account_state)
+    market_freshness = assert_fresh_execution_market_snapshot(mode, risk.get("market"))
     order_equity = float(order_account_state.get("equity_usdt") or ACCOUNT_EQUITY_USDT)
 
     if mode == "paper":
         order = prepare_order_payload(run_id, intent, "PAPER", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
+        order["market_freshness"] = market_freshness
         order["status"] = "paper_filled"
         order["venue_status"] = "PAPER_FILLED"
         persist_order(order)
@@ -10433,6 +10506,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
     if mode == "binance_testnet_validate":
         order = prepare_order_payload(run_id, intent, "TEST", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
+        order["market_freshness"] = market_freshness
         params = binance_order_params(order, mode)
         validation = validate_binance_order_bundle(order, params, mode)
         order["status"] = "testnet_validated"
@@ -10448,6 +10522,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
             raise ValueError("BINANCE_PLACE_TESTNET_ORDERS must be true before placing real testnet orders.")
         order = prepare_order_payload(run_id, intent, "TESTLIVE", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
+        order["market_freshness"] = market_freshness
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)
         order["leverage_sync"] = ensure_binance_leverage(order, mode)
@@ -10527,6 +10602,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         go_live_gate = assert_go_live_gate_allows_live_order()
         order = prepare_order_payload(run_id, intent, "LIVE", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
+        order["market_freshness"] = market_freshness
         order["go_live_gate"] = go_live_gate
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)
