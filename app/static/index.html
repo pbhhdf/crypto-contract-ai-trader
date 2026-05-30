@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard12" />
+    <title>加密合约交易工作台</title>
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard13" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand-block">
         <p class="eyebrow">本地纸交易控制台</p>
-        <h1>加密货币合约 AI 交易工作台</h1>
+        <h1>合约 AI 交易工作台</h1>
       </div>
       <div class="topbar-meta">
         <span>Binance U 本位</span>
@@ -35,18 +35,18 @@
           </select>
         </div>
         <div class="control-actions">
-          <button id="start-run" class="primary">启动一次分析</button>
+          <button id="start-run" class="primary">启动分析</button>
           <button id="stop" class="danger">紧急停止</button>
-          <button id="panic-stop" class="danger">事故停机+撤单</button>
-          <button id="reset-stop" class="secondary">解除停止</button>
+          <button id="panic-stop" class="danger">停机撤单</button>
+          <button id="reset-stop" class="secondary">解除</button>
         </div>
       </section>
 
       <nav class="view-switcher" aria-label="工作台视图">
         <button class="view-tab active" data-view-target="overview">总览</button>
-        <button class="view-tab" data-view-target="ai">AI 操作员</button>
-        <button class="view-tab" data-view-target="live">实盘门禁</button>
-        <button class="view-tab" data-view-target="trading">交易流</button>
+        <button class="view-tab" data-view-target="ai">AI</button>
+        <button class="view-tab" data-view-target="live">门禁</button>
+        <button class="view-tab" data-view-target="trading">交易</button>
         <button class="view-tab" data-view-target="risk">风控</button>
         <button class="view-tab" data-view-target="backtest">回测</button>
         <button class="view-tab" data-view-target="ops">运维</button>
@@ -302,29 +302,34 @@
             <input id="server-live-readiness-testnet" type="checkbox" />
             <span>包含真实 Testnet</span>
           </label>
-          <div class="control-group compact-control">
-            <label for="live-arm-confirmation">授权短语</label>
-            <input id="live-arm-confirmation" type="text" placeholder="ARM_LIVE_TRADING" />
-          </div>
-          <div class="control-group compact-control">
-            <label for="live-arm-ttl">授权分钟</label>
-            <input id="live-arm-ttl" type="number" min="1" max="1440" step="1" value="10" />
-          </div>
-          <div class="control-group live-arm-reason">
-            <label for="live-arm-reason">原因</label>
-            <input id="live-arm-reason" type="text" value="manual live readiness check" />
-          </div>
-          <button id="arm-live-gate" class="danger">武装实盘</button>
-          <button id="disarm-live-gate" class="secondary">解除武装</button>
-          <div class="control-group compact-control">
-            <label for="live-pilot-confirmation">首单确认短语</label>
-            <input id="live-pilot-confirmation" type="text" placeholder="LAUNCH_LIVE_PILOT" />
-          </div>
-          <button id="check-live-pilot" class="secondary">检查首单执行器</button>
-          <button id="run-live-pilot" class="danger" disabled>提交实盘首单</button>
-          <button id="check-live-postflight" class="secondary">检查首单复盘</button>
-          <button id="resolve-live-blockers" class="secondary">生成解除路线</button>
           <span id="live-gate-summary">等待读取准入状态</span>
+          <details class="live-action-drawer">
+            <summary>授权、首单与阻塞解除</summary>
+            <div class="live-action-drawer-grid">
+              <div class="control-group compact-control">
+                <label for="live-arm-confirmation">授权短语</label>
+                <input id="live-arm-confirmation" type="text" placeholder="ARM_LIVE_TRADING" />
+              </div>
+              <div class="control-group compact-control">
+                <label for="live-arm-ttl">授权分钟</label>
+                <input id="live-arm-ttl" type="number" min="1" max="1440" step="1" value="10" />
+              </div>
+              <div class="control-group live-arm-reason">
+                <label for="live-arm-reason">原因</label>
+                <input id="live-arm-reason" type="text" value="manual live readiness check" />
+              </div>
+              <button id="arm-live-gate" class="danger">武装实盘</button>
+              <button id="disarm-live-gate" class="secondary">解除武装</button>
+              <div class="control-group compact-control">
+                <label for="live-pilot-confirmation">首单确认短语</label>
+                <input id="live-pilot-confirmation" type="text" placeholder="LAUNCH_LIVE_PILOT" />
+              </div>
+              <button id="check-live-pilot" class="secondary">检查首单执行器</button>
+              <button id="run-live-pilot" class="danger" disabled>提交实盘首单</button>
+              <button id="check-live-postflight" class="secondary">检查首单复盘</button>
+              <button id="resolve-live-blockers" class="secondary">生成解除路线</button>
+            </div>
+          </details>
           <details class="live-export-drawer">
             <summary>导出文件与交接材料</summary>
             <div class="live-export-actions">
@@ -1185,6 +1190,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard12"></script>
+    <script src="/app.js?v=20260531-dashboard13"></script>
   </body>
 </html>

@@ -35,9 +35,9 @@ textarea {
 .topbar {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
+  gap: 14px;
   align-items: center;
-  padding: 12px 28px;
+  padding: 9px 24px;
   background: #111827;
   color: #fff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -62,7 +62,7 @@ h2 {
 }
 
 h1 {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
@@ -72,7 +72,7 @@ h2 {
 
 .status-pill {
   min-width: 92px;
-  padding: 7px 12px;
+  padding: 6px 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
   text-align: center;
@@ -104,7 +104,7 @@ h2 {
 
 .shell {
   width: min(1480px, calc(100% - 32px));
-  margin: 10px auto 16px;
+  margin: 8px auto 12px;
 }
 
 .view-switcher {
@@ -115,8 +115,8 @@ h2 {
   gap: 4px;
   align-items: center;
   overflow-x: auto;
-  margin: 10px 0;
-  padding: 6px;
+  margin: 8px 0;
+  padding: 5px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
@@ -130,8 +130,9 @@ h2 {
 }
 
 .view-tab {
-  min-height: 34px;
-  padding: 0 14px;
+  min-height: 32px;
+  padding: 0 12px;
+  gap: 8px;
   white-space: nowrap;
   border-color: transparent;
   background: transparent;
@@ -139,6 +140,29 @@ h2 {
   font-size: 13px;
   font-weight: 700;
   transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.view-tab::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 999px;
+  background: #9aa7b8;
+}
+
+.view-tab[data-view-target="live"]::before,
+.view-tab[data-view-target="risk"]::before {
+  background: var(--amber);
+}
+
+.view-tab[data-view-target="trading"]::before,
+.view-tab[data-view-target="backtest"]::before {
+  background: var(--green);
+}
+
+.view-tab[data-view-target="ai"]::before {
+  background: var(--blue);
 }
 
 .view-tab.active {
@@ -153,9 +177,9 @@ h2 {
 
 .view-stage {
   display: grid;
-  gap: 12px;
-  margin-top: 10px;
-  max-height: max(420px, calc(100vh - 224px));
+  gap: 10px;
+  margin-top: 8px;
+  max-height: max(420px, calc(100vh - 206px));
   overflow: auto;
   padding-right: 4px;
   scrollbar-gutter: stable;
@@ -166,10 +190,25 @@ h2 {
 }
 
 body[data-active-view="overview"] .view-stage {
-  max-height: max(420px, calc(100vh - 224px));
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  max-height: max(420px, calc(100vh - 206px));
   overflow: auto;
   padding-right: 0;
   gap: 10px;
+}
+
+body[data-active-view="overview"] .account-grid {
+  grid-column: 1 / -1;
+}
+
+body[data-active-view="overview"] .metrics-grid {
+  grid-column: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body[data-active-view="overview"] .system-grid {
+  grid-column: 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 body[data-active-view="ops"] .view-stage,
@@ -220,7 +259,7 @@ body[data-active-view="overview"] .view-section {
 .control-band {
   grid-template-columns: minmax(136px, 0.65fr) minmax(136px, 0.65fr) minmax(0, 2.5fr);
   align-items: end;
-  padding: 9px;
+  padding: 8px;
   gap: 10px;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -235,8 +274,8 @@ body[data-active-view="overview"] .view-section {
 
 .control-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(118px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(96px, 1fr));
+  gap: 7px;
 }
 
 .control-band button,
@@ -256,7 +295,7 @@ select,
 input,
 textarea,
 button {
-  min-height: 38px;
+  min-height: 36px;
   border-radius: 7px;
   border: 1px solid var(--line);
 }
@@ -285,7 +324,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 16px;
+  padding: 0 14px;
   cursor: pointer;
   font-weight: 700;
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
@@ -302,7 +341,7 @@ button:disabled {
 }
 
 button.compact {
-  min-height: 30px;
+  min-height: 28px;
   padding: 0 10px;
   font-size: 12px;
 }
@@ -370,8 +409,8 @@ body[data-active-view="overview"] .account-grid {
 
 .backtest-detail-group summary {
   display: flex;
-  min-height: 42px;
-  padding: 11px 12px;
+  min-height: 38px;
+  padding: 9px 11px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -385,8 +424,8 @@ body[data-active-view="overview"] .account-grid {
 .ops-detail-group summary,
 .live-detail-group summary {
   display: flex;
-  min-height: 42px;
-  padding: 11px 12px;
+  min-height: 38px;
+  padding: 9px 11px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -471,16 +510,16 @@ body[data-active-view="overview"] .account-grid {
 .metric {
   position: relative;
   display: grid;
-  gap: 7px;
-  min-height: 70px;
-  padding: 12px 14px;
+  gap: 6px;
+  min-height: 64px;
+  padding: 10px 12px;
   border-radius: 8px;
   overflow: hidden;
   isolation: isolate;
 }
 
 .metric strong {
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.18;
 }
 
@@ -499,9 +538,9 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 .system-card {
   position: relative;
   display: grid;
-  gap: 5px;
-  min-height: 70px;
-  padding: 13px 13px 13px 15px;
+  gap: 4px;
+  min-height: 64px;
+  padding: 11px 12px 11px 14px;
   border-radius: 8px;
   overflow: hidden;
 }
@@ -513,7 +552,7 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 }
 
 .system-card strong {
-  font-size: 18px;
+  font-size: 17px;
   overflow-wrap: anywhere;
 }
 
@@ -559,15 +598,15 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
 }
 
 .readiness-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .research-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .architecture-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 body[data-active-view="research"] .architecture-panel {
@@ -627,24 +666,24 @@ body[data-active-view="research"] .architecture-panel {
 }
 
 .scheduler-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .testnet-drill-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .live-gate-panel {
-  margin-top: 16px;
+  margin-top: 12px;
   overflow-x: hidden !important;
 }
 
 .exchange-recovery-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .alert-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .scheduler-controls,
@@ -714,13 +753,14 @@ body[data-active-view="research"] .architecture-panel {
 #live-gate-summary {
   grid-column: span 2;
   align-self: center;
-  min-height: 40px;
-  padding: 10px 12px;
+  min-height: 36px;
+  padding: 8px 10px;
   border: 1px solid #d6dfeb;
   border-radius: 8px;
   background: #f8fafc;
 }
 
+.live-action-drawer,
 .live-export-drawer {
   grid-column: 1 / -1;
   min-width: 0;
@@ -729,19 +769,31 @@ body[data-active-view="research"] .architecture-panel {
   background: #fbfdff;
 }
 
+.live-action-drawer summary,
 .live-export-drawer summary {
-  min-height: 38px;
-  padding: 10px 12px;
+  min-height: 36px;
+  padding: 9px 12px;
   cursor: pointer;
   color: #344054;
   font-weight: 800;
 }
 
+.live-action-drawer[open] summary,
+.live-export-drawer[open] summary {
+  border-bottom: 1px solid var(--line);
+  background: #f6f9fd;
+}
+
+.live-action-drawer-grid,
 .live-export-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 0 10px 10px;
+}
+
+.live-action-drawer-grid {
+  padding-top: 10px;
 }
 
 .live-pilot-grid {
@@ -897,7 +949,7 @@ body[data-active-view="research"] .architecture-panel {
 }
 
 .risk-panel {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .risk-controls {
@@ -929,8 +981,8 @@ body[data-active-view="research"] .architecture-panel {
 .recovery-facts {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
-  gap: 12px;
-  margin-top: 14px;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .recovery-facts {
@@ -1476,7 +1528,7 @@ body[data-active-view="evidence"] #audit-chain-recent {
 
 .workspace {
   grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.85fr);
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 body[data-active-view="trading"] .workspace {
@@ -1490,12 +1542,12 @@ body[data-active-view="trading"] .intent-workspace {
 }
 
 .panel {
-  padding: 16px;
+  padding: 13px;
   border-radius: 8px;
 }
 
 .panel-large {
-  min-height: 430px;
+  min-height: 360px;
 }
 
 .panel-heading {
@@ -1503,7 +1555,7 @@ body[data-active-view="trading"] .intent-workspace {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 9px;
 }
 
 .subheading {
@@ -1827,6 +1879,11 @@ th {
 }
 
 @media (min-width: 1040px) {
+  body {
+    height: 100vh;
+    overflow: hidden;
+  }
+
   .shell {
     display: grid;
     grid-template-columns: 176px minmax(0, 1fr);
@@ -1863,16 +1920,36 @@ th {
   .view-stage {
     grid-area: stage;
     margin-top: 0;
-    max-height: calc(100vh - 156px);
+    max-height: calc(100vh - 138px);
   }
 
   body[data-active-view="overview"] .view-stage {
-    max-height: calc(100vh - 156px);
+    max-height: calc(100vh - 138px);
   }
 
   .view-section.panel,
   .view-section.workspace {
-    max-height: calc(100vh - 156px);
+    max-height: calc(100vh - 138px);
+  }
+}
+
+@media (min-width: 760px) and (max-width: 1039px) {
+  body {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .view-stage {
+    max-height: calc(100vh - 194px);
+  }
+
+  body[data-active-view="overview"] .view-stage {
+    max-height: calc(100vh - 194px);
+  }
+
+  .view-section.panel,
+  .view-section.workspace {
+    max-height: calc(100vh - 194px);
   }
 }
 
@@ -1897,6 +1974,7 @@ th {
   .alert-card,
   .alert-actions,
   .live-gate-actions,
+  .live-action-drawer-grid,
   .live-export-actions,
   .alert-deliveries,
   .exchange-recovery-actions,
@@ -1927,6 +2005,17 @@ th {
 }
 
 @media (max-width: 760px) {
+  body[data-active-view="overview"] .view-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body[data-active-view="overview"] .account-grid,
+  body[data-active-view="overview"] .metrics-grid,
+  body[data-active-view="overview"] .system-grid {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   body[data-active-view="trading"] .view-stage,
   body[data-active-view="ops"] .view-stage,
   body[data-active-view="evidence"] .view-stage,
@@ -1943,6 +2032,11 @@ th {
   }
 
   #live-gate-summary {
+    grid-column: auto;
+  }
+
+  .live-action-drawer,
+  .live-export-drawer {
     grid-column: auto;
   }
 }
