@@ -210,6 +210,7 @@ def main() -> int:
                 "scripts/check_live_protection_guard.py",
                 "scripts/check_pre_submit_order_tests.py",
                 "scripts/check_execution_market_freshness.py",
+                "scripts/check_stateful_order_conflict.py",
                 "scripts/check_parent_cancel_cascade.py",
                 "scripts/check_startup_disarms_live_arming.py",
                 "scripts/check_scheduler.py",
@@ -273,6 +274,7 @@ def main() -> int:
     steps.append(run_step("live_protection_guard", [PYTHON, "scripts/check_live_protection_guard.py"], timeout=60))
     steps.append(run_step("pre_submit_order_tests", [PYTHON, "scripts/check_pre_submit_order_tests.py"], timeout=30))
     steps.append(run_step("execution_market_freshness", [PYTHON, "scripts/check_execution_market_freshness.py"], timeout=30))
+    steps.append(run_step("stateful_order_conflict", [PYTHON, "scripts/check_stateful_order_conflict.py"], timeout=30))
     steps.append(run_step("parent_cancel_cascade", [PYTHON, "scripts/check_parent_cancel_cascade.py"], timeout=60))
     steps.append(run_step("startup_disarms_live_arming", [PYTHON, "scripts/check_startup_disarms_live_arming.py"], timeout=60))
     steps.append(run_step("ui_chinese", [PYTHON, "scripts/check_ui_chinese.py"], timeout=30))

@@ -8919,11 +8919,79 @@ def assert_fresh_execution_market_snapshot(mode: str, snapshot: dict[str, Any] |
     return freshness
 
 
+def stateful_order_mode_for_order(order: dict[str, Any]) -> str:
+    status = str(order.get("status") or "").lower().strip()
+    order_id = str(order.get("id") or "").upper().strip()
+    client_order_id = str(order.get("client_order_id") or "").upper().strip()
+    if status.startswith("live_") or order_id.startswith("LIVE") or client_order_id.startswith("LIVE"):
+        return "live_guarded"
+    if status.startswith("testnet_") or order_id.startswith("TESTLIVE") or client_order_id.startswith("TESTLIVE"):
+        return "binance_testnet_place_order"
+    if status == "pending_reconcile":
+        return "stateful_unknown"
+    return ""
+
+
+def stateful_order_conflict_reason(order: dict[str, Any], mode: str, symbol: str) -> str:
+    normalized_mode = str(mode or "").lower().strip()
+    if normalized_mode not in STATEFUL_EXCHANGE_ORDER_MODES:
+        return ""
+    if str(order.get("symbol") or "").upper().strip() != str(symbol or "").upper().strip():
+        return ""
+    order_mode = stateful_order_mode_for_order(order)
+    if order_mode not in {normalized_mode, "stateful_unknown"}:
+        return ""
+    status = str(order.get("status") or "").lower().strip()
+    reconcile_status = str(order.get("reconcile_status") or "").lower().strip()
+    venue_status = str(order.get("venue_status") or "").upper().strip()
+    terminal_venue_statuses = {"FILLED", "CANCELED", "EXPIRED", "REJECTED"}
+    if status == "pending_reconcile" or venue_status == "UNKNOWN":
+        return "订单处于未知或待对账状态，必须先 reconcile 后才能重试"
+    if status in CANCELABLE_BINANCE_ORDER_STATUSES and venue_status not in terminal_venue_statuses:
+        return "交易所订单可能仍然打开，必须先确认、撤单或成交终态"
+    if reconcile_status in {"unchecked", "needs_reconcile", "needs_review"} and status in NEEDS_RECONCILE_STATUSES:
+        return "本地 OMS 仍要求复核该订单"
+    return ""
+
+
+def stateful_order_conflicts(mode: str, symbol: str, limit: int = 500) -> list[dict[str, Any]]:
+    conflicts: list[dict[str, Any]] = []
+    for order in get_orders(limit=limit):
+        reason = stateful_order_conflict_reason(order, mode, symbol)
+        if reason:
+            conflicts.append(
+                {
+                    "id": order.get("id"),
+                    "client_order_id": order.get("client_order_id"),
+                    "symbol": order.get("symbol"),
+                    "status": order.get("status"),
+                    "venue_status": order.get("venue_status"),
+                    "reconcile_status": order.get("reconcile_status"),
+                    "updated_at": order.get("updated_at"),
+                    "mode": stateful_order_mode_for_order(order),
+                    "reason": reason,
+                }
+            )
+    return conflicts
+
+
+def assert_no_stateful_order_conflicts(mode: str, symbol: str) -> list[dict[str, Any]]:
+    conflicts = stateful_order_conflicts(mode, symbol)
+    if conflicts:
+        sample = ", ".join(str(item.get("id") or item.get("client_order_id")) for item in conflicts[:5])
+        raise ValueError(
+            f"Stateful order conflict blocks new {mode_label(mode)} order for {symbol}: "
+            f"{len(conflicts)} existing order(s) require reconcile or terminal venue state first: {sample}"
+        )
+    return conflicts
+
+
 def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "paper") -> dict[str, Any]:
     config = risk_config()
     account_state = account_state_for_mode(mode)
     account_freshness = execution_account_freshness(mode, account_state)
     market_freshness = execution_market_freshness(mode, snapshot)
+    order_conflicts = [] if intent["side"] == "HOLD" else stateful_order_conflicts(mode, intent["symbol"])
     equity_base = float(account_state.get("equity_usdt") or ACCOUNT_EQUITY_USDT)
     daily_realized = today_realized_pnl()
     daily_loss_limit = equity_base * config["max_daily_loss_pct"]
@@ -8955,6 +9023,15 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
             "name": "Mode lock",
             "status": "pass",
             "detail": f"已启用运行模式：{', '.join(mode_label(mode) for mode in enabled_modes())}。",
+        },
+        {
+            "name": "Stateful order conflict",
+            "status": "fail" if order_conflicts else "pass",
+            "detail": (
+                f"同交易对存在 {len(order_conflicts)} 个未完成或待对账真实订单，必须先执行 OMS 对账/撤单。"
+                if order_conflicts
+                else "同交易对没有阻塞新真实订单的未对账/未知状态订单。"
+            ),
         },
         {
             "name": "Allowed symbol",
@@ -9046,6 +9123,7 @@ def risk_check(intent: dict[str, Any], snapshot: dict[str, Any], mode: str = "pa
         "account": account_state,
         "market": snapshot,
         "market_freshness": market_freshness,
+        "order_conflicts": order_conflicts,
     }
 
 
@@ -10392,6 +10470,7 @@ def persist_order(order: dict[str, Any]) -> dict[str, Any]:
             "protection_kind": order.get("protection_kind"),
             "pre_submit_validation": order.get("pre_submit_validation"),
             "market_freshness": order.get("market_freshness"),
+            "order_conflict_check": order.get("order_conflict_check"),
         },
     )
     return order
@@ -10486,6 +10565,7 @@ def close_paper_position(position_id: str, reason: str = "manual_close") -> dict
 def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mode: str) -> dict[str, Any] | None:
     if intent["side"] == "HOLD" or risk["status"] == "rejected":
         return None
+    order_conflict_check = assert_no_stateful_order_conflicts(mode, intent["symbol"])
     order_account_state = risk.get("account") or account_state_for_mode(mode)
     account_freshness = assert_fresh_execution_account_state(mode, order_account_state)
     market_freshness = assert_fresh_execution_market_snapshot(mode, risk.get("market"))
@@ -10495,6 +10575,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order = prepare_order_payload(run_id, intent, "PAPER", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
+        order["order_conflict_check"] = order_conflict_check
         order["status"] = "paper_filled"
         order["venue_status"] = "PAPER_FILLED"
         persist_order(order)
@@ -10507,6 +10588,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order = prepare_order_payload(run_id, intent, "TEST", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
+        order["order_conflict_check"] = order_conflict_check
         params = binance_order_params(order, mode)
         validation = validate_binance_order_bundle(order, params, mode)
         order["status"] = "testnet_validated"
@@ -10523,6 +10605,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order = prepare_order_payload(run_id, intent, "TESTLIVE", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
+        order["order_conflict_check"] = order_conflict_check
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)
         order["leverage_sync"] = ensure_binance_leverage(order, mode)
@@ -10603,6 +10686,7 @@ def execute_order(run_id: str, intent: dict[str, Any], risk: dict[str, Any], mod
         order = prepare_order_payload(run_id, intent, "LIVE", order_equity, order_account_state)
         order["account_freshness"] = account_freshness
         order["market_freshness"] = market_freshness
+        order["order_conflict_check"] = order_conflict_check
         order["go_live_gate"] = go_live_gate
         params = binance_order_params(order, mode)
         order["margin_type_sync"] = ensure_binance_margin_type(order, mode)
