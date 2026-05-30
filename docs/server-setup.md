@@ -366,6 +366,11 @@ This runs:
 Readiness should be `pass` or a clearly explained `warn`. Any `fail` must be
 fixed before enabling Binance Testnet validation.
 
+The local suite also includes `python3 scripts/check_unknown_submit_reconcile.py`.
+It simulates a Binance submit response with unknown state for real Testnet and
+`live_guarded`, verifies that the OMS records `pending_reconcile`, queries the
+venue by `clientOrderId`, and blocks a retry before a second POST can be sent.
+
 ## Backup And Restore
 
 Create a backup before every risky server change:

@@ -213,6 +213,7 @@ def main() -> int:
                 "scripts/check_execution_market_freshness.py",
                 "scripts/check_stateful_order_conflict.py",
                 "scripts/check_stateful_risk_warning_blocks.py",
+                "scripts/check_unknown_submit_reconcile.py",
                 "scripts/check_exchange_open_order_gate.py",
                 "scripts/check_exchange_position_gate.py",
                 "scripts/check_parent_cancel_cascade.py",
@@ -288,6 +289,7 @@ def main() -> int:
     steps.append(run_step("execution_market_freshness", [PYTHON, "scripts/check_execution_market_freshness.py"], timeout=30))
     steps.append(run_step("stateful_order_conflict", [PYTHON, "scripts/check_stateful_order_conflict.py"], timeout=30))
     steps.append(run_step("stateful_risk_warning_blocks", [PYTHON, "scripts/check_stateful_risk_warning_blocks.py"], timeout=30))
+    steps.append(run_step("unknown_submit_reconcile", [PYTHON, "scripts/check_unknown_submit_reconcile.py"], timeout=30))
     steps.append(run_step("exchange_open_order_gate", [PYTHON, "scripts/check_exchange_open_order_gate.py"], timeout=30))
     steps.append(run_step("exchange_position_gate", [PYTHON, "scripts/check_exchange_position_gate.py"], timeout=30))
     steps.append(run_step("parent_cancel_cascade", [PYTHON, "scripts/check_parent_cancel_cascade.py"], timeout=60))

@@ -35,6 +35,7 @@ This first version is intentionally conservative:
 - Testnet drill cycle history, runner reports, and go-live evidence reports now expose `order_evidence` and `real_cycle_counted` so a server handoff can prove exactly which Binance Testnet cycle counted toward live readiness.
 - The Go-live gate now blocks `live_guarded` order execution unless explicit live flags, risk limits, OMS reconciliation, alert health, recovery sync, live private stream, Testnet drill cycles, and backtest/walk-forward checks all pass.
 - Stateful exchange execution now requires deterministic risk status `approved`; paper mode can still rehearse warning paths, but real Testnet placement and `live_guarded` do not submit orders on risk warnings.
+- Unknown Binance submit states are now covered by a smoke test for both real Testnet placement and `live_guarded`: the system records `pending_reconcile`, queries by `clientOrderId`, and blocks any retry before another POST can be sent.
 - Even after the Go-live gate passes, live order execution requires a short-lived `ARM_LIVE_TRADING` authorization from the UI/API; the authorization expires automatically and has a per-arming entry-order budget.
 - Binance orders are normalized against exchange `exchangeInfo` filters before signed submission, and live/testnet placement submits audited STOP_MARKET / TAKE_PROFIT_MARKET close-position protection orders.
 - Paper mode sizes orders from the local ledger; Binance testnet/live modes size orders from the synced exchange account equity/free-margin snapshot and record that source in the audit trail.
