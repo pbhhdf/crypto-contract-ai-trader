@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard20" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard22" />
   </head>
   <body>
     <header class="topbar">
@@ -53,6 +53,43 @@
         <button class="view-tab" data-view-target="evidence">证据</button>
         <button class="view-tab" data-view-target="research">架构</button>
       </nav>
+
+      <section class="action-board">
+        <article class="desk-card desk-primary" id="desk-posture-card">
+          <div class="desk-card-head">
+            <span>当前处置</span>
+            <b id="desk-mode-pill">读取中</b>
+          </div>
+          <strong id="desk-headline">正在读取系统状态</strong>
+          <p id="desk-subtitle">读取完成后，这里只显示现在最需要关注的一件事。</p>
+          <div class="desk-mini-grid">
+            <span id="desk-run-chip">运行：-</span>
+            <span id="desk-risk-chip">风控：-</span>
+            <span id="desk-account-chip">权益：-</span>
+          </div>
+        </article>
+        <article class="desk-card desk-blockers">
+          <div class="desk-card-head">
+            <span>阻塞项</span>
+            <b id="desk-blocker-count">0</b>
+          </div>
+          <ul id="desk-blocker-list">
+            <li>等待门禁与就绪检查结果</li>
+          </ul>
+        </article>
+        <article class="desk-card desk-actions">
+          <div class="desk-card-head">
+            <span>常用动作</span>
+            <b>快捷入口</b>
+          </div>
+          <div class="desk-action-grid">
+            <button type="button" class="secondary" data-jump-view="live" data-focus-id="check-live-gate">检查门禁</button>
+            <button type="button" class="secondary" data-jump-view="ops" data-focus-id="run-testnet-drill-now">跑 Testnet</button>
+            <button type="button" class="secondary" data-jump-view="trading" data-focus-id="reconcile-orders">订单对账</button>
+            <button type="button" class="danger" data-jump-view="risk" data-focus-id="risk-panic-stop">事故停机</button>
+          </div>
+        </article>
+      </section>
 
       <section class="overview-grid">
         <article class="overview-card">
@@ -1223,6 +1260,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard18"></script>
+    <script src="/app.js?v=20260531-dashboard20"></script>
   </body>
 </html>

@@ -109,6 +109,15 @@ const els = {
   overviewTestnetDetail: document.querySelector("#overview-testnet-detail"),
   overviewAuditStatus: document.querySelector("#overview-audit-status"),
   overviewAuditDetail: document.querySelector("#overview-audit-detail"),
+  deskPostureCard: document.querySelector("#desk-posture-card"),
+  deskModePill: document.querySelector("#desk-mode-pill"),
+  deskHeadline: document.querySelector("#desk-headline"),
+  deskSubtitle: document.querySelector("#desk-subtitle"),
+  deskRunChip: document.querySelector("#desk-run-chip"),
+  deskRiskChip: document.querySelector("#desk-risk-chip"),
+  deskAccountChip: document.querySelector("#desk-account-chip"),
+  deskBlockerCount: document.querySelector("#desk-blocker-count"),
+  deskBlockerList: document.querySelector("#desk-blocker-list"),
   aiOperatorStatus: document.querySelector("#ai-operator-status"),
   aiOperatorBoundary: document.querySelector("#ai-operator-boundary"),
   aiOperatorMessages: document.querySelector("#ai-operator-messages"),
@@ -284,13 +293,13 @@ let goLiveGateLoadedAt = 0;
 const activeViewStorageKey = "cryptoTrader.activeView";
 
 const viewGroups = {
-  overview: [".overview-grid", ".account-grid", ".metrics-grid", ".system-grid"],
+  overview: [".action-board", ".overview-grid", ".account-grid"],
   ai: [".ai-operator-panel"],
   live: [".live-gate-panel"],
-  trading: [".workflow-workspace", ".intent-workspace", ".positions-panel", ".orders-panel"],
+  trading: [".metrics-grid", ".workflow-workspace", ".intent-workspace", ".positions-panel", ".orders-panel"],
   risk: [".risk-panel"],
   backtest: [".backtest-panel"],
-  ops: [".scheduler-panel", ".testnet-drill-panel", ".exchange-recovery-panel", ".alert-panel"],
+  ops: [".system-grid", ".scheduler-panel", ".testnet-drill-panel", ".exchange-recovery-panel", ".alert-panel"],
   evidence: [".readiness-panel", ".audit-chain-panel", ".raw-log-panel"],
   research: [".research-panel", ".architecture-panel"],
 };
@@ -353,6 +362,25 @@ function initializeViewSwitcher() {
   activate(initialView, false);
   window.addEventListener("hashchange", () => {
     activate(window.location.hash.replace("#", "") || "overview", false);
+  });
+}
+
+function initializeDeskActions() {
+  document.querySelectorAll("[data-jump-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const view = button.dataset.jumpView || "overview";
+      const tab = document.querySelector(`.view-tab[data-view-target="${view}"]`);
+      tab?.click();
+      window.setTimeout(() => {
+        const targetId = button.dataset.focusId;
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!target) return;
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+        target.focus({ preventScroll: true });
+        target.classList.add("focus-pulse");
+        window.setTimeout(() => target.classList.remove("focus-pulse"), 1100);
+      }, 80);
+    });
   });
 }
 
@@ -719,6 +747,108 @@ function renderConfig(data) {
   els.testnetStatus.textContent = exchange.testnet_enabled
     ? `测试网${exchange.testnet_key_ready ? "密钥已配置" : "未配置密钥"} / 测试网下单${exchange.testnet_places_real_orders ? "开" : "关"} / 保证金${exchange.target_margin_type || "-"}${exchange.sync_margin_type_before_order ? "同步开" : "同步关"} / 杠杆同步${exchange.sync_leverage_before_order ? "开" : "关"} / One-way${exchange.require_one_way_position_mode ? "必需" : "未要求"} / 实盘${exchange.live_places_real_orders ? "开" : "关"}`
     : `测试网未启用 / 保证金${exchange.target_margin_type || "-"}${exchange.sync_margin_type_before_order ? "同步开" : "同步关"} / 杠杆同步${exchange.sync_leverage_before_order ? "开" : "关"} / One-way${exchange.require_one_way_position_mode ? "必需" : "未要求"} / 实盘${exchange.live_places_real_orders ? "开" : "关"}`;
+}
+
+function deskBlockerText(value) {
+  const map = {
+    live_flags: "实盘开关未进入 live_guarded，真实订单仍被锁定",
+    deployment_profile: "服务器部署剖面未通过，先完成 server 环境与 Basic Auth",
+    testnet_drill_cycles: "真实 Testnet 演练证据不足，还不能进入实盘",
+    live_attestation: "人工实盘证据未确认：提现关闭、IP 白名单、外部备份",
+    live_pilot_capital: "首单资金上限或小额试运行约束未确认",
+    exchange_position_mode: "交易所持仓模式未确认 One-way",
+    short_live_arming: "实盘短时武装窗口未开启或已过期",
+    emergency_stop: "紧急停止中，自动交易和调度均应保持暂停",
+    alert_critical: "存在严重告警，先处理告警再推进交易",
+    oms_reconcile: "OMS 仍有未知或待复核订单，需要先对账",
+    readiness_fail: "部署就绪检查存在失败项",
+    readiness_warn: "部署就绪检查存在警告项",
+  };
+  return map[value] || localizedText(value);
+}
+
+function uniqueList(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = String(item || "");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function collectDeskBlockers(data) {
+  const blockers = [];
+  const gate = data.go_live_gate || {};
+  const readiness = data.readiness || {};
+  const readinessItems = readiness.items || [];
+  const alerts = data.alerts?.summary || {};
+  const oms = data.oms || {};
+  if (data.system?.emergency_stop) blockers.push("emergency_stop");
+  if (alerts.critical) blockers.push("alert_critical");
+  blockers.push(...(gate.blocking_gates || []));
+  if (Number(oms.needs_review_orders || 0) || Number(oms.unknown_venue_status_orders || 0)) {
+    blockers.push("oms_reconcile");
+  }
+  const failCount = readinessItems.filter((item) => item.status === "fail").length;
+  const warnCount = readinessItems.filter((item) => item.status === "warn").length;
+  if (failCount) blockers.push("readiness_fail");
+  if (warnCount && !failCount) blockers.push("readiness_warn");
+  return uniqueList(blockers);
+}
+
+function renderDesk(data) {
+  if (!els.deskHeadline) return;
+  const run = data.latest_run;
+  const gate = data.go_live_gate || {};
+  const risk = data.risk || {};
+  const account = data.account || {};
+  const alerts = data.alerts?.summary || {};
+  const blockers = collectDeskBlockers(data);
+  const mode = data.system?.mode || "paper";
+  let posture = "ok";
+  let modeLabel = modeText(mode);
+  let headline = "系统在线，可以继续纸交易或演练";
+  let subtitle = "首屏只保留处置摘要；细节放在左侧标签页里按需查看。";
+
+  if (data.system?.emergency_stop || risk.emergency_stop) {
+    posture = "danger";
+    modeLabel = "已停机";
+    headline = "紧急停止中，先确认风险与未结订单";
+    subtitle = "所有自动调度应保持暂停；需要解除时先查看风控页和 OMS 对账。";
+  } else if (Number(alerts.critical || 0)) {
+    posture = "danger";
+    modeLabel = "有严重告警";
+    headline = "存在严重告警，先处理告警再交易";
+    subtitle = `当前严重告警 ${fmt(alerts.critical)} 条，建议进入运维页确认通知和恢复记录。`;
+  } else if (gate.ready_for_live_order) {
+    posture = "active";
+    modeLabel = "可进入首单";
+    headline = "实盘前置条件已通过，仍需短时武装";
+    subtitle = "真实订单只允许在短时武装窗口内提交，并继续受风控和 OMS 约束。";
+  } else if (blockers.length) {
+    posture = "warn";
+    modeLabel = "实盘锁定";
+    headline = "当前适合纸交易、回测和 Testnet 演练";
+    subtitle = `还有 ${fmt(blockers.length)} 个上线阻塞项，先处理最上方的阻塞项即可。`;
+  } else if (run?.status === "running" || run?.status === "queued") {
+    posture = "active";
+    modeLabel = "分析中";
+    headline = "策略分析正在运行";
+    subtitle = "交易意图、风控结论和 OMS 事件会在交易页同步刷新。";
+  }
+
+  els.deskPostureCard?.setAttribute("data-status", posture);
+  els.deskModePill.textContent = modeLabel;
+  els.deskHeadline.textContent = headline;
+  els.deskSubtitle.textContent = subtitle;
+  els.deskRunChip.textContent = `运行：${run ? statusText(run.status) : "未启动"}`;
+  els.deskRiskChip.textContent = `风控：${risk.emergency_stop ? "紧急停止" : statusText(run?.risk_status)}`;
+  els.deskAccountChip.textContent = `权益：${money(account.equity_usdt)}`;
+  els.deskBlockerCount.textContent = fmt(blockers.length);
+  els.deskBlockerList.innerHTML = blockers.length
+    ? blockers.slice(0, 5).map((item) => `<li>${escapeHtml(deskBlockerText(item))}</li>`).join("")
+    : `<li>暂无阻塞项；继续观察告警、OMS 与 Testnet 演练。</li>`;
 }
 
 function renderReadiness(readiness) {
@@ -2737,6 +2867,7 @@ async function refresh() {
     if (data.go_live_gate?.summary_only) {
       ensureGoLiveGateLoaded();
     }
+    renderDesk(data);
     renderRiskCenter(data.risk, data.account);
     renderMetrics(data);
     renderAccount(data.account);
@@ -3646,5 +3777,6 @@ els.runWalkforward.addEventListener("click", async () => {
 });
 
 initializeViewSwitcher();
+initializeDeskActions();
 refresh();
 setInterval(refresh, 1200);
