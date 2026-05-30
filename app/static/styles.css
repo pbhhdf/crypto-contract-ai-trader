@@ -183,10 +183,14 @@ body[data-active-view="research"] .view-stage {
 body[data-active-view="overview"] .view-stage,
 body[data-active-view="ai"] .view-stage,
 body[data-active-view="live"] .view-stage,
-body[data-active-view="trading"] .view-stage,
 body[data-active-view="risk"] .view-stage,
 body[data-active-view="backtest"] .view-stage {
   grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-active-view="trading"] .view-stage {
+  grid-template-columns: minmax(0, 1.18fr) minmax(310px, 0.82fr);
+  align-items: start;
 }
 
 body[data-active-view="evidence"] .raw-log-panel {
@@ -344,6 +348,49 @@ body[data-active-view="overview"] .account-grid {
 .backtest-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 16px;
+}
+
+.backtest-detail-group {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.backtest-detail-group summary {
+  display: flex;
+  min-height: 42px;
+  padding: 11px 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  color: #243247;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.backtest-detail-group summary small {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.backtest-detail-group[open] {
+  padding: 0 12px 12px;
+}
+
+.backtest-detail-group[open] summary {
+  margin: 0 -12px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #f6f9fd;
+}
+
+.backtest-detail-group .table-wrap {
+  max-height: 340px;
+  overflow: auto;
 }
 
 .system-grid {
@@ -1397,6 +1444,16 @@ body[data-active-view="evidence"] #audit-chain-recent {
 .workspace {
   grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.85fr);
   margin-top: 16px;
+}
+
+body[data-active-view="trading"] .workspace {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 0;
+}
+
+body[data-active-view="trading"] .workflow-workspace,
+body[data-active-view="trading"] .intent-workspace {
+  gap: 10px;
 }
 
 .panel {

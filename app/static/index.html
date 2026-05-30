@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>加密合约 AI 交易工作台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard7" />
+    <link rel="stylesheet" href="/styles.css?v=20260531-dashboard8" />
   </head>
   <body>
     <header class="topbar">
@@ -561,6 +561,11 @@
             <strong id="backtest-trades-count">-</strong>
           </article>
         </div>
+        <details class="backtest-detail-group">
+          <summary>
+            <span>交易明细</span>
+            <small>最近回测成交</small>
+          </summary>
         <div class="table-wrap">
           <table>
             <thead>
@@ -580,10 +585,12 @@
             <tbody id="backtest-trades"></tbody>
           </table>
         </div>
-        <div class="panel-heading subheading">
-          <h2>参数排行榜</h2>
-          <span id="compare-id">暂无参数比较</span>
-        </div>
+        </details>
+        <details class="backtest-detail-group">
+          <summary>
+            <span>参数排行榜</span>
+            <small id="compare-id">暂无参数比较</small>
+          </summary>
         <div class="table-wrap">
           <table>
             <thead>
@@ -603,10 +610,12 @@
             <tbody id="compare-results"></tbody>
           </table>
         </div>
-        <div class="panel-heading subheading">
-          <h2>滚动样本外验证</h2>
-          <span id="walkforward-id">暂无滚动验证</span>
-        </div>
+        </details>
+        <details class="backtest-detail-group">
+          <summary>
+            <span>滚动样本外验证</span>
+            <small id="walkforward-id">暂无滚动验证</small>
+          </summary>
         <div class="backtest-grid">
           <article class="metric">
             <span>样本外收益</span>
@@ -642,6 +651,7 @@
             <tbody id="walkforward-folds"></tbody>
           </table>
         </div>
+        </details>
       </section>
 
       <section class="workspace workflow-workspace">
@@ -1103,6 +1113,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard7"></script>
+    <script src="/app.js?v=20260531-dashboard8"></script>
   </body>
 </html>
