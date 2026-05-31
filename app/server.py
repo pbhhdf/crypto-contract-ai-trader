@@ -43,6 +43,17 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT_DIR / "app" / "static"
 DATA_DIR = ROOT_DIR / "data"
 DB_PATH = DATA_DIR / "trader.db"
+SERVER_STARTED_AT = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def file_sha256(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
+SERVER_SOURCE_FINGERPRINT = file_sha256(Path(__file__).resolve())
 
 
 def load_env_file(path: Path) -> None:
@@ -14029,6 +14040,16 @@ def latest_state(
     return state
 
 
+def server_build_info() -> dict[str, Any]:
+    return {
+        "server_pid": os.getpid(),
+        "server_started_at": SERVER_STARTED_AT,
+        "server_source": ai_operator_relative_path(Path(__file__).resolve()),
+        "server_fingerprint": SERVER_SOURCE_FINGERPRINT,
+        "python": sys.version.split()[0],
+    }
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -14089,7 +14110,14 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/api/health":
-            self.send_json({"ok": True, "time": utc_now(), "auth_enabled": AUTH_ENABLED})
+            self.send_json(
+                {
+                    "ok": True,
+                    "time": utc_now(),
+                    "auth_enabled": AUTH_ENABLED,
+                    "build": server_build_info(),
+                }
+            )
             return
         if not self.require_auth():
             return

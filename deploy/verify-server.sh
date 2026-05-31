@@ -30,6 +30,7 @@ export TRADER_AUTH_PASSWORD="${TRADER_AUTH_PASSWORD:-$(get_env APP_BASIC_AUTH_PA
 
 python3 scripts/preflight.py
 python3 scripts/live_env_profile.py --target live_guarded
+python3 scripts/check_server_build_api.py
 python3 scripts/check_binance_time_drift.py
 python3 scripts/check_ui_chinese.py
 python3 scripts/run_all_checks.py

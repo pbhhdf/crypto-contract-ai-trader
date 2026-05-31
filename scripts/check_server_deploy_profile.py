@@ -50,6 +50,7 @@ def main() -> int:
         "scripts/check_live_env_pack.py",
         "scripts/check_live_env_pack_api.py",
         "scripts/check_live_blocker_resolution.py",
+        "scripts/check_server_build_api.py",
         "scripts/check_live_pilot_postflight.py",
     ]
     missing = [path for path in required_files if not (ROOT_DIR / path).exists()]
@@ -96,6 +97,7 @@ def main() -> int:
     for needle in (
         "python3 scripts/preflight.py",
         "python3 scripts/live_env_profile.py --target live_guarded",
+        "python3 scripts/check_server_build_api.py",
         "python3 scripts/run_all_checks.py",
         "python3 scripts/server_go_live_audit.py",
         "python3 scripts/export_live_launch_plan.py",

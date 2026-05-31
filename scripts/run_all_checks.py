@@ -505,6 +505,7 @@ def main() -> int:
                 "stderr": "",
             }
         )
+        steps.append(run_server_step("server_build_api", [PYTHON, "scripts/check_server_build_api.py"], timeout=30))
         steps.append(run_server_step("paper_workflow", [PYTHON, "scripts/check_public_data.py"], timeout=120))
         steps.append(run_server_step("risk_controls", [PYTHON, "scripts/check_risk_controls.py"], timeout=150))
         steps.append(run_server_step("panic_stop", [PYTHON, "scripts/check_panic_stop.py"], timeout=120))
