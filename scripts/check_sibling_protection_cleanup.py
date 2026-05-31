@@ -148,6 +148,13 @@ def main() -> int:
         reconcile_take_order = server.get_order(reconcile_take) or {}
         if reconcile_take_order.get("status") != "testnet_protection_canceled":
             return fail("take-profit sibling was not canceled after stop-loss fill reconcile", reconcile_take_order)
+        reconcile_parent_order = server.get_order(reconcile_parent) or {}
+        if reconcile_parent_order.get("status") != "testnet_protected_exit":
+            return fail("parent order was not marked exited by protection after reconcile", reconcile_parent_order)
+        if reconcile_parent_order.get("reconcile_status") != "reconciled":
+            return fail("parent protection exit should be reconciled", reconcile_parent_order)
+        if server.stateful_order_conflict_reason(reconcile_parent_order, "binance_testnet_place_order", "BTCUSDT"):
+            return fail("protected-exit parent should not block new stateful executions", reconcile_parent_order)
 
         calls.clear()
         persist_parent_pair(stream_parent, stream_stop, stream_take)
@@ -166,6 +173,9 @@ def main() -> int:
             return fail("take-profit child was not marked protection-filled from private stream", stream_take_order)
         if stream_stop_order.get("status") != "testnet_protection_canceled":
             return fail("stop-loss sibling was not canceled after take-profit fill stream event", stream_stop_order)
+        stream_parent_order = server.get_order(stream_parent) or {}
+        if stream_parent_order.get("status") != "testnet_protected_exit":
+            return fail("parent order was not marked exited by protection from private stream", stream_parent_order)
         stream_cancel_ids = [call["params"].get("origClientOrderId") for call in calls if call["method"] == "DELETE"]
         if stream_cancel_ids != [stream_stop]:
             return fail("private stream sibling cleanup canceled the wrong order", calls)
@@ -181,6 +191,9 @@ def main() -> int:
         canceled_take_order = server.get_order(canceled_take) or {}
         if canceled_take_order.get("status") != "testnet_protection_submitted":
             return fail("zero-fill canceled child should not cancel the sibling protection order", canceled_take_order)
+        canceled_parent_order = server.get_order(canceled_parent) or {}
+        if canceled_parent_order.get("status") != "testnet_submitted":
+            return fail("zero-fill canceled child should not mark parent as protection-exited", canceled_parent_order)
         zero_fill_cancel_ids = [call["params"].get("origClientOrderId") for call in calls if call["method"] == "DELETE"]
         if zero_fill_cancel_ids:
             return fail("zero-fill canceled child should not send sibling cancel requests", calls)
@@ -191,15 +204,18 @@ def main() -> int:
                     "ok": True,
                     "reconcile": {
                         "filled_child": reconciled.get("status"),
+                        "parent_status": reconcile_parent_order.get("status"),
                         "canceled_sibling": reconcile_take_order.get("status"),
                     },
                     "private_stream": {
                         "processed": stream_processed,
                         "note": stream_note,
                         "filled_child": stream_take_order.get("status"),
+                        "parent_status": stream_parent_order.get("status"),
                         "canceled_sibling": stream_stop_order.get("status"),
                     },
                     "zero_fill_cancel": {
+                        "parent_status": canceled_parent_order.get("status"),
                         "remaining_sibling": canceled_take_order.get("status"),
                         "cancel_calls": zero_fill_cancel_ids,
                     },

@@ -3090,3 +3090,149 @@ th {
     max-height: 285px;
   }
 }
+
+/* Trading view workbench pass: one desktop screen, panel-local scrolling. */
+@media (min-width: 860px) {
+  .view-stage,
+  body[data-active-view="overview"] .view-stage,
+  .view-section.panel,
+  .view-section.workspace {
+    max-height: calc(100vh - 146px);
+  }
+
+  body[data-active-view="trading"] .view-stage {
+    grid-template-columns: minmax(0, 1.24fr) minmax(310px, 0.76fr);
+    grid-template-rows: auto minmax(0, 1.08fr) minmax(0, 0.72fr);
+    align-content: stretch;
+    align-items: stretch;
+    overflow: hidden;
+    height: calc(100vh - 146px);
+    max-height: calc(100vh - 146px);
+  }
+
+  body[data-active-view="trading"] .view-stage > .view-section {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body[data-active-view="trading"] .metrics-grid {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  body[data-active-view="trading"] .metrics-grid .metric {
+    min-height: 58px;
+    padding: 8px 10px;
+  }
+
+  body[data-active-view="trading"] .metrics-grid .metric strong {
+    font-size: 17px;
+  }
+
+  body[data-active-view="trading"] .workflow-workspace {
+    grid-column: 1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1.42fr) minmax(168px, 0.58fr) !important;
+    gap: 8px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body[data-active-view="trading"] .intent-workspace {
+    grid-column: 2;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body[data-active-view="trading"] .positions-panel {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  body[data-active-view="trading"] .orders-panel {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  body[data-active-view="trading"] .workflow-workspace > .panel,
+  body[data-active-view="trading"] .workflow-workspace > aside,
+  body[data-active-view="trading"] .intent-workspace > .panel,
+  body[data-active-view="trading"] .positions-panel,
+  body[data-active-view="trading"] .orders-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+  body[data-active-view="trading"] .workflow-workspace > aside .panel-heading,
+  body[data-active-view="trading"] .intent-workspace .panel-heading,
+  body[data-active-view="trading"] .positions-panel .panel-heading,
+  body[data-active-view="trading"] .orders-panel .panel-heading {
+    flex: 0 0 auto;
+  }
+
+  body[data-active-view="trading"] .timeline,
+  body[data-active-view="trading"] .kv-list,
+  body[data-active-view="trading"] .intent-box,
+  body[data-active-view="trading"] .checks,
+  body[data-active-view="trading"] .positions-panel .evidence-detail-group,
+  body[data-active-view="trading"] .orders-panel .evidence-detail-group {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    overflow: auto;
+  }
+
+  body[data-active-view="trading"] .positions-panel .evidence-detail-group,
+  body[data-active-view="trading"] .orders-panel .evidence-detail-group {
+    margin-top: 8px;
+  }
+
+  body[data-active-view="trading"] .positions-panel .table-wrap,
+  body[data-active-view="trading"] .orders-panel .table-wrap {
+    max-height: none;
+  }
+
+  body[data-active-view="trading"] .oms-facts {
+    flex: 0 0 auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  body[data-active-view="trading"] .oms-facts article {
+    min-height: 54px;
+    padding: 8px 9px;
+  }
+}
+
+@media (min-width: 860px) and (max-width: 1120px) {
+  body[data-active-view="trading"] .view-stage {
+    grid-template-columns: minmax(0, 1.16fr) minmax(280px, 0.84fr);
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 0.7fr);
+  }
+
+  body[data-active-view="trading"] .workflow-workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  body[data-active-view="trading"] .workflow-workspace > aside {
+    display: none !important;
+  }
+
+  body[data-active-view="trading"] .panel-heading h2 {
+    font-size: 14px;
+  }
+
+  body[data-active-view="trading"] .event {
+    padding: 8px 9px;
+  }
+}

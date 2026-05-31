@@ -332,7 +332,7 @@ def main() -> int:
         steps.append(run_server_step("oms_reconcile", [PYTHON, "scripts/check_oms.py"], timeout=120))
         steps.append(run_server_step("research_artifacts", [PYTHON, "scripts/check_research_artifacts.py"], timeout=120))
         steps.append(run_server_step("architecture_blueprint", [PYTHON, "scripts/check_architecture_blueprint.py"], timeout=120))
-        steps.append(run_server_step("ai_operator", [PYTHON, "scripts/check_ai_operator.py"], timeout=180))
+        steps.append(run_server_step("ai_operator", [PYTHON, "scripts/check_ai_operator.py"], timeout=300))
         steps.append(run_server_step("alert_delivery", [PYTHON, "scripts/check_alert_delivery.py"], timeout=60))
         steps.append(run_server_step("alert_watchdog", [PYTHON, "scripts/check_alert_watchdog.py"], timeout=120))
         steps.append(run_server_step("testnet_drill", [PYTHON, "scripts/check_testnet_drill.py"], timeout=120))

@@ -276,12 +276,14 @@ RECONCILED_ORDER_STATUSES = {
     "testnet_submitted",
     "testnet_filled",
     "testnet_canceled",
+    "testnet_protected_exit",
     "testnet_protection_submitted",
     "testnet_protection_filled",
     "testnet_protection_canceled",
     "live_submitted",
     "live_filled",
     "live_canceled",
+    "live_protected_exit",
     "live_protection_submitted",
     "live_protection_filled",
     "live_protection_canceled",
@@ -4947,6 +4949,49 @@ def cancel_sibling_protections_for_filled_child(
     return attempts
 
 
+def mark_parent_exited_by_protection(
+    child_order: dict[str, Any],
+    mode: str,
+    trigger: str,
+    child_venue_status: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    parent_order_id = str(child_order.get("parent_order_id") or "")
+    child_order_id = str(child_order.get("id") or "")
+    if not parent_order_id or not child_order_id:
+        return None
+    venue_status = str(child_venue_status or "").upper()
+    if venue_status != "FILLED":
+        return None
+    parent_order = get_order(parent_order_id)
+    if not parent_order:
+        return None
+    prefix = "live" if mode == "live_guarded" else "testnet"
+    protection_kind = str(child_order.get("protection_kind") or "protection")
+    filled_quantity = parent_terminal_fill_quantity(payload)
+    updated = update_order_state(
+        parent_order_id,
+        status=f"{prefix}_protected_exit",
+        reconcile_status="reconciled",
+        reconcile_note=(
+            f"Parent workflow exited by {protection_kind} protection order {child_order_id}; "
+            f"trigger={trigger}; child venue status={venue_status}; filled={filled_quantity or '-'}."
+        ),
+        reason="binance_parent_exited_by_protection",
+        payload={
+            "trigger": trigger,
+            "mode": mode,
+            "child_order_id": child_order_id,
+            "child_client_order_id": child_order.get("client_order_id"),
+            "child_protection_kind": protection_kind,
+            "child_venue_status": venue_status,
+            "child_executed_quantity": filled_quantity,
+            "payload": payload or {},
+        },
+    )
+    return updated
+
+
 def insert_order_transition(
     order_id: str,
     from_status: str | None,
@@ -5144,10 +5189,19 @@ def reconcile_order(order_id: str) -> dict[str, Any]:
                 venue_status,
                 {"response": response},
             )
+            protected_parent = mark_parent_exited_by_protection(
+                updated,
+                order_mode,
+                "binance_order_reconcile",
+                venue_status,
+                {"response": response},
+            )
             if child_attempts:
                 updated["child_protection_cancel_attempts"] = child_attempts
             if sibling_attempts:
                 updated["sibling_protection_cancel_attempts"] = sibling_attempts
+            if protected_parent:
+                updated["parent_exit_order"] = protected_parent
             return updated
         except Exception as exc:
             return update_order_state(
@@ -6033,12 +6087,14 @@ def zh_status(status: str | None) -> str:
         "testnet_protection_canceled": "测试网保护单已取消",
         "testnet_filled": "测试网已成交",
         "testnet_canceled": "测试网已取消",
+        "testnet_protected_exit": "测试网保护退出",
         "live_submitted": "实盘已提交",
         "live_protection_submitted": "实盘保护单已提交",
         "live_protection_filled": "实盘保护单已成交",
         "live_protection_canceled": "实盘保护单已取消",
         "live_filled": "实盘已成交",
         "live_canceled": "实盘已取消",
+        "live_protected_exit": "实盘保护退出",
     }
     return labels.get(status or "", status or "-")
 
@@ -10711,10 +10767,22 @@ def handle_private_order_update(mode: str, event: dict[str, Any]) -> tuple[bool,
         venue_status,
         {"event": event},
     )
+    protected_parent = mark_parent_exited_by_protection(
+        updated,
+        mode,
+        "binance_private_order_update",
+        venue_status,
+        {"event": event},
+    )
     if sibling_attempts:
         return True, (
             f"Updated local order {updated['id']} from private stream; "
             f"sibling protection child-fill actions={len(sibling_attempts)}."
+        )
+    if protected_parent:
+        return True, (
+            f"Updated local order {updated['id']} from private stream; "
+            f"parent {protected_parent['id']} exited by protection."
         )
     if child_attempts:
         return True, (
