@@ -988,6 +988,7 @@ function renderReadiness(readiness) {
 function localReadinessStatusText(report) {
   if (!report || report.exists === false) return "尚未生成";
   if (report.status === "running") return "运行中";
+  if (report.status === "interrupted") return "已中断";
   if (report.status === "completed" && report.ok === true) return "已完成";
   if (report.status === "completed" && report.ok === false) return "有失败项";
   if (report.status === "error") return "读取失败";
@@ -1000,6 +1001,7 @@ function localReadinessStepStatusText(status) {
     running: "运行中",
     done: "已完成",
     completed: "已完成",
+    interrupted: "已中断",
   };
   return map[status] || status || "";
 }
@@ -1028,6 +1030,9 @@ function renderLocalReadiness(report) {
   els.localReadinessPath.textContent = report.report_path
     ? `报告：${report.report_path}`
     : "尚未找到可读取的验收报告";
+  if (report.interrupted && report.interrupted_reason) {
+    els.localReadinessPath.textContent = `报告已中断：${report.interrupted_reason}`;
+  }
   els.localReadinessSteps.innerHTML = lastSteps.length
     ? lastSteps.map((step) => {
         const badge = step.ok ? "pass" : step.timed_out ? "fail" : "warn";

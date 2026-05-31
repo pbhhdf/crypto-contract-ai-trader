@@ -344,6 +344,7 @@ def main() -> int:
                 "scripts/check_server_live_readiness_cancel.py",
                 "scripts/check_server_live_readiness_api.py",
                 "scripts/check_local_readiness_api.py",
+                "scripts/check_local_readiness_stale.py",
                 "scripts/check_check_runner_timeout.py",
                 "scripts/live_env_profile.py",
                 "scripts/check_live_env_profile.py",
@@ -362,6 +363,7 @@ def main() -> int:
                 "scripts/check_live_blocker_resolution.py",
                 "scripts/check_live_pilot.py",
                 "scripts/check_live_pilot_postflight.py",
+                "scripts/check_live_postflight_protection_chain.py",
                 "scripts/run_guarded_live_pilot_once.py",
                 "scripts/check_guarded_live_pilot_runner.py",
                 "scripts/check_live_protection_guard.py",
@@ -464,6 +466,7 @@ def main() -> int:
     steps.append(run_step("strategy_quality_sweep", [PYTHON, "scripts/check_strategy_quality_sweep.py"], timeout=45))
     steps.append(run_step("server_live_readiness_runner", [PYTHON, "scripts/check_server_live_readiness_runner.py"], timeout=45))
     steps.append(run_step("server_live_readiness_cancel", [PYTHON, "scripts/check_server_live_readiness_cancel.py"], timeout=45))
+    steps.append(run_step("local_readiness_stale", [PYTHON, "scripts/check_local_readiness_stale.py"], timeout=30))
     steps.append(run_step("check_runner_timeout", [PYTHON, "scripts/check_check_runner_timeout.py"], timeout=20))
     steps.append(run_step("ai_operator_schema", [PYTHON, "scripts/check_ai_operator_schema.py"], timeout=30))
     steps.append(run_step("audit_chain", [PYTHON, "scripts/check_audit_chain.py"], timeout=60))
@@ -545,6 +548,7 @@ def main() -> int:
         steps.append(run_server_step("live_launch_kit_export", [PYTHON, "scripts/export_live_launch_kit.py"], timeout=360))
         steps.append(run_server_step("live_pilot", [PYTHON, "scripts/check_live_pilot.py"], timeout=120))
         steps.append(run_server_step("live_pilot_postflight", [PYTHON, "scripts/check_live_pilot_postflight.py"], timeout=120))
+        steps.append(run_step("live_postflight_protection_chain", [PYTHON, "scripts/check_live_postflight_protection_chain.py"], timeout=30))
         steps.append(run_server_step("guarded_live_pilot_runner", [PYTHON, "scripts/check_guarded_live_pilot_runner.py"], timeout=120))
         steps.append(run_server_step("go_live_gate", [PYTHON, "scripts/check_go_live_gate.py"], timeout=120))
         steps.append(run_server_step("live_attestation", [PYTHON, "scripts/check_live_attestation.py"], timeout=60))

@@ -150,6 +150,7 @@ PRIVATE_STREAM_STALE_SECONDS = env_int("PRIVATE_STREAM_STALE_SECONDS", 86400, 30
 EXCHANGE_RECOVERY_STALE_SECONDS = env_int("EXCHANGE_RECOVERY_STALE_SECONDS", 3600, 300, 86400)
 EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS = env_int("EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS", 30, 1, 3600)
 EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS = env_int("EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS", 60, 1, 3600)
+LOCAL_READINESS_STALE_SECONDS = env_int("LOCAL_READINESS_STALE_SECONDS", 300, 30, 86400)
 ALERT_WEBHOOK_ENABLED = env_bool("ALERT_WEBHOOK_ENABLED", False)
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "").strip()
 ALERT_WEBHOOK_SECRET = os.getenv("ALERT_WEBHOOK_SECRET", "").strip()
@@ -2520,12 +2521,40 @@ def local_readiness_report_status(limit: int = 8) -> dict[str, Any]:
     capped_limit = max(1, min(50, int(limit or 8)))
     readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
     current_step = payload.get("current_step") if isinstance(payload.get("current_step"), dict) else {}
+    raw_status = payload.get("status") or ("completed" if "created_at" in payload else "unknown")
+    updated_at = payload.get("updated_at") or payload.get("created_at") or ""
+    age_seconds = seconds_since(str(updated_at or ""))
+    is_active_report = report_path == active_path
+    stale = bool(
+        is_active_report
+        and raw_status == "running"
+        and age_seconds is not None
+        and age_seconds > LOCAL_READINESS_STALE_SECONDS
+    )
+    status = "interrupted" if stale else raw_status
+    if stale:
+        current_step = {
+            **current_step,
+            "status": "interrupted",
+            "stale": True,
+            "detail": (
+                f"本地验收进度已 {round(age_seconds or 0, 1)} 秒没有更新；"
+                "全量检查进程可能在写入最终报告前被终止。"
+            ),
+        }
     return {
         "exists": True,
-        "ok": payload.get("ok"),
-        "status": payload.get("status") or ("completed" if "created_at" in payload else "unknown"),
+        "ok": False if stale else payload.get("ok"),
+        "status": status,
+        "raw_status": raw_status,
+        "stale": stale,
+        "interrupted": stale,
+        "stale_seconds": None if age_seconds is None else round(age_seconds, 1),
+        "stale_after_seconds": LOCAL_READINESS_STALE_SECONDS,
+        "interrupted_step": current_step.get("name") if stale else "",
+        "interrupted_reason": current_step.get("detail") if stale else "",
         "started_at": payload.get("started_at") or payload.get("created_at") or "",
-        "updated_at": payload.get("updated_at") or payload.get("created_at") or "",
+        "updated_at": updated_at,
         "current_step": current_step,
         "completed_step_count": payload.get("completed_step_count") or len(steps),
         "failed_step_count": len(failed_steps),
