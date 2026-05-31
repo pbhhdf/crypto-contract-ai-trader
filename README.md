@@ -264,6 +264,11 @@ Run all local deployment-readiness checks and write a JSON report under `reports
 py scripts\run_all_checks.py
 ```
 
+While the suite is running it also refreshes `reports/local-readiness-active.json`
+and `reports/local-readiness-<timestamp>.partial.json` after every step. If SSH,
+CI, or the terminal kills the process, inspect the active report to see the last
+running step, completed step count, failed steps, and any timed-out command.
+
 Export a go-live evidence package from the running service:
 
 ```powershell

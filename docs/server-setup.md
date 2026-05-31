@@ -402,6 +402,12 @@ python3 scripts/preflight.py
 TRADER_BASE_URL=http://127.0.0.1:8787 python3 scripts/run_all_checks.py
 ```
 
+During `run_all_checks.py`, the verifier continuously writes
+`reports/local-readiness-active.json` plus a timestamped
+`reports/local-readiness-*.partial.json`. If the session is interrupted or a
+single check times out, use that active report to identify the current step,
+completed step count, failed steps, and timeout reason before retrying.
+
 ## Binance Testnet Validation
 
 Only after paper mode is stable:

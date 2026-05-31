@@ -9,13 +9,14 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 REPORT_DIR = ROOT_DIR / "reports"
+ACTIVE_REPORT_WRITER: Callable[[str, str], None] | None = None
 
 
 def load_env_file(path: Path) -> None:
@@ -54,6 +55,55 @@ def emit_progress(name: str, status: str, **fields: Any) -> None:
     print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
 
 
+def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_suffix(f"{path.suffix}.tmp")
+    temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def build_readiness_report(
+    *,
+    status: str,
+    started_at: str,
+    steps: list[dict[str, Any]],
+    readiness: Any = None,
+    ok: bool | None = None,
+    current_step: dict[str, Any] | None = None,
+    final_report_path: Path | None = None,
+) -> dict[str, Any]:
+    failed_steps = [step["name"] for step in steps if not step.get("ok")]
+    return {
+        "ok": bool(ok) if ok is not None else False,
+        "status": status,
+        "started_at": started_at,
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "project_root": str(ROOT_DIR),
+        "base_url": BASE_URL,
+        "current_step": current_step or {},
+        "completed_step_count": len(steps),
+        "failed_steps": failed_steps,
+        "final_report_path": str(final_report_path) if final_report_path else "",
+        "steps": steps,
+        "readiness": readiness,
+    }
+
+
+def update_active_step(name: str, status: str) -> None:
+    if ACTIVE_REPORT_WRITER is not None:
+        ACTIVE_REPORT_WRITER(name, status)
+
+
+class ReportingSteps(list[dict[str, Any]]):
+    def __init__(self, on_append: Callable[[dict[str, Any]], None]) -> None:
+        super().__init__()
+        self.on_append = on_append
+
+    def append(self, item: dict[str, Any]) -> None:
+        super().append(item)
+        self.on_append(item)
+
+
 def terminate_process_tree(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
@@ -87,6 +137,7 @@ def run_step(name: str, args: list[str], timeout: int = 120) -> dict[str, Any]:
         env.setdefault("TRADER_AUTH_USER", AUTH_USER)
         env.setdefault("TRADER_AUTH_PASSWORD", AUTH_PASSWORD)
     emit_progress(name, "start", timeout_seconds=timeout)
+    update_active_step(name, "running")
     process: subprocess.Popen[str] | None = None
     stdout = ""
     stderr = ""
@@ -134,6 +185,7 @@ def run_step(name: str, args: list[str], timeout: int = 120) -> dict[str, Any]:
     ok = returncode == 0 and not timed_out and not launch_error
     duration = round(time.time() - started, 2)
     emit_progress(name, "done", ok=ok, duration_seconds=duration, timed_out=timed_out)
+    update_active_step(name, "done")
     return {
         "name": name,
         "ok": ok,
@@ -241,8 +293,37 @@ def run_server_step(name: str, args: list[str], timeout: int = 120) -> dict[str,
 
 
 def main() -> int:
+    global ACTIVE_REPORT_WRITER
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    steps: list[dict[str, Any]] = []
+    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    run_slug = utc_now_slug()
+    report_path = REPORT_DIR / f"local-readiness-{run_slug}.json"
+    active_report_path = REPORT_DIR / "local-readiness-active.json"
+    partial_report_path = REPORT_DIR / f"local-readiness-{run_slug}.partial.json"
+    current_step: dict[str, Any] = {"name": "starting", "status": "starting"}
+
+    def write_active_report(step_name: str = "", step_status: str = "") -> None:
+        nonlocal current_step
+        if step_name or step_status:
+            current_step = {
+                "name": step_name or current_step.get("name") or "",
+                "status": step_status or current_step.get("status") or "",
+                "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }
+        payload = build_readiness_report(
+            status="running",
+            started_at=started_at,
+            steps=list(steps),
+            readiness=None,
+            current_step=current_step,
+            final_report_path=report_path,
+        )
+        write_json_atomic(active_report_path, payload)
+        write_json_atomic(partial_report_path, payload)
+
+    steps: ReportingSteps = ReportingSteps(lambda step: write_active_report(str(step.get("name") or ""), "done"))
+    ACTIVE_REPORT_WRITER = write_active_report
+    write_active_report("starting", "running")
 
     steps.append(
         run_step(
@@ -510,14 +591,32 @@ def main() -> int:
     ok = all(step["ok"] for step in steps) and (readiness or {}).get("overall") in {"pass", "warn"}
     report = {
         "ok": ok,
+        "status": "completed",
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "started_at": started_at,
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "project_root": str(ROOT_DIR),
         "base_url": BASE_URL,
+        "current_step": {"name": "completed", "status": "completed"},
+        "completed_step_count": len(steps),
+        "failed_steps": [step["name"] for step in steps if not step["ok"]],
+        "final_report_path": str(report_path),
         "steps": steps,
         "readiness": readiness,
     }
-    report_path = REPORT_DIR / f"local-readiness-{utc_now_slug()}.json"
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_atomic(report_path, report)
+    completed_active_report = build_readiness_report(
+        status="completed",
+        started_at=started_at,
+        steps=list(steps),
+        readiness=readiness,
+        ok=ok,
+        current_step={"name": "completed", "status": "completed", "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+        final_report_path=report_path,
+    )
+    write_json_atomic(active_report_path, completed_active_report)
+    write_json_atomic(partial_report_path, completed_active_report)
+    ACTIVE_REPORT_WRITER = None
 
     summary = {
         "ok": ok,
