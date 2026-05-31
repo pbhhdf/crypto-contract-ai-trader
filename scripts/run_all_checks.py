@@ -57,9 +57,21 @@ def emit_progress(name: str, status: str, **fields: Any) -> None:
 
 def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(f"{path.suffix}.tmp")
+    temp_path = path.with_name(f"{path.name}.{os.getpid()}.{time.monotonic_ns()}.tmp")
     temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp_path.replace(path)
+    last_error: PermissionError | None = None
+    for attempt in range(8):
+        try:
+            temp_path.replace(path)
+            return
+        except PermissionError as exc:
+            last_error = exc
+            time.sleep(0.05 * (attempt + 1))
+    try:
+        temp_path.unlink(missing_ok=True)
+    finally:
+        if last_error is not None:
+            raise last_error
 
 
 def build_readiness_report(
@@ -467,6 +479,7 @@ def main() -> int:
     steps.append(run_step("strategy_quality_sweep", [PYTHON, "scripts/check_strategy_quality_sweep.py"], timeout=45))
     steps.append(run_step("server_live_readiness_runner", [PYTHON, "scripts/check_server_live_readiness_runner.py"], timeout=45))
     steps.append(run_step("server_live_readiness_cancel", [PYTHON, "scripts/check_server_live_readiness_cancel.py"], timeout=45))
+    steps.append(run_step("local_readiness_atomic_write", [PYTHON, "scripts/check_local_readiness_atomic_write.py"], timeout=30))
     steps.append(run_step("local_readiness_stale", [PYTHON, "scripts/check_local_readiness_stale.py"], timeout=30))
     steps.append(run_step("check_runner_timeout", [PYTHON, "scripts/check_check_runner_timeout.py"], timeout=20))
     steps.append(run_step("go_live_gate_local_readiness", [PYTHON, "scripts/check_go_live_gate_local_readiness.py"], timeout=30))

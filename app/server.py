@@ -2470,6 +2470,19 @@ def _compact_local_readiness_step(step: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _read_json_file_with_retry(path: Path, attempts: int = 6) -> dict[str, Any]:
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (PermissionError, json.JSONDecodeError) as exc:
+            last_error = exc
+            time.sleep(0.04 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+    return {}
+
+
 def local_readiness_report_status(limit: int = 8) -> dict[str, Any]:
     report_dir = ROOT_DIR / "reports"
     active_path = report_dir / "local-readiness-active.json"
@@ -2497,7 +2510,7 @@ def local_readiness_report_status(limit: int = 8) -> dict[str, Any]:
             "last_steps": [],
         }
     try:
-        payload = json.loads(report_path.read_text(encoding="utf-8"))
+        payload = _read_json_file_with_retry(report_path)
     except Exception as exc:  # noqa: BLE001 - report should be visible even when corrupt.
         return {
             "exists": True,

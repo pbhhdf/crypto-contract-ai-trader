@@ -452,10 +452,78 @@ function initializeViewSwitcher() {
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => activate(tab.dataset.viewTarget || "overview"));
   });
-  const initialView = window.location.hash.replace("#", "") || storedView() || "overview";
+  const initialView = window.location.hash.replace("#", "") || "overview";
   activate(initialView, false);
   window.addEventListener("hashchange", () => {
     activate(window.location.hash.replace("#", "") || "overview", false);
+  });
+}
+
+function initializeSectionIndexes() {
+  const groups = [
+    {
+      panelSelector: ".research-panel",
+      detailSelector: ".research-detail-group",
+      label: "研究目录",
+    },
+    {
+      panelSelector: ".architecture-panel",
+      detailSelector: ".architecture-detail-group",
+      label: "蓝图目录",
+    },
+  ];
+  groups.forEach(({ panelSelector, detailSelector, label }) => {
+    const panel = document.querySelector(panelSelector);
+    if (!panel || panel.querySelector(".section-index")) return;
+    const details = Array.from(panel.querySelectorAll(detailSelector));
+    if (!details.length) return;
+    const index = document.createElement("div");
+    index.className = "section-index";
+    index.setAttribute("aria-label", label);
+    index.innerHTML = `<span>${label}</span><div class="section-index-buttons"></div>`;
+    const buttons = index.querySelector(".section-index-buttons");
+    const sync = () => {
+      details.forEach((detail) => {
+        const button = buttons?.querySelector(`[data-section-for="${detail.id}"]`);
+        button?.classList.toggle("active", detail.open);
+        button?.setAttribute("aria-pressed", detail.open ? "true" : "false");
+      });
+    };
+    details.forEach((detail, indexNumber) => {
+      if (!detail.id) {
+        detail.id = `${panelSelector.replace(/[^a-z0-9]/gi, "")}-${indexNumber}`;
+      }
+      const summary = detail.querySelector("summary");
+      const title = (summary?.textContent || `第 ${indexNumber + 1} 节`).trim().replace(/\s+/g, " ");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "section-index-button";
+      button.dataset.sectionFor = detail.id;
+      button.textContent = title;
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        const shouldOpen = !detail.open;
+        details.forEach((other) => {
+          if (other !== detail) other.open = false;
+        });
+        detail.open = shouldOpen;
+        sync();
+        if (shouldOpen) {
+          window.setTimeout(() => detail.scrollIntoView({ block: "nearest", behavior: "smooth" }), 40);
+        }
+      });
+      buttons?.appendChild(button);
+      detail.addEventListener("toggle", () => {
+        if (detail.open) {
+          details.forEach((other) => {
+            if (other !== detail) other.open = false;
+          });
+        }
+        sync();
+      });
+    });
+    details[0].insertAdjacentElement("beforebegin", index);
+    sync();
   });
 }
 
@@ -4110,6 +4178,7 @@ els.runWalkforward.addEventListener("click", async () => {
 });
 
 initializeViewSwitcher();
+initializeSectionIndexes();
 initializeDeskActions();
 refresh();
 setInterval(refresh, 1200);

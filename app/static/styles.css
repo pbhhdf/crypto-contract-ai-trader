@@ -4146,3 +4146,168 @@ th {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* Final UI compaction pass: the research blueprint is a drill-down console,
+   not a long document page. */
+.section-index {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0 10px;
+  padding: 9px;
+  border: 1px solid #dce6f1;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fbfdff, #f4f8fd);
+}
+
+.section-index > span {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.section-index-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
+  gap: 6px;
+}
+
+.section-index-button {
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 9px;
+  border-color: #d7e2ee;
+  background: #ffffff;
+  color: #344054;
+  font-size: 12px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-index-button.active {
+  border-color: #1d2939;
+  background: #111827;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+}
+
+@media (min-width: 1040px) {
+  .view-context {
+    min-height: 46px;
+    padding: 8px 10px;
+  }
+
+  .view-context-copy strong {
+    font-size: 16px;
+  }
+
+  .view-context-copy small,
+  .view-context-focus b {
+    font-size: 12px;
+  }
+
+  body[data-active-view="research"] .view-stage {
+    grid-template-columns: minmax(360px, 0.78fr) minmax(0, 1.22fr);
+    overflow: hidden;
+  }
+
+  body[data-active-view="research"] .research-panel,
+  body[data-active-view="research"] .architecture-panel {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    overflow: auto;
+  }
+
+  body[data-active-view="research"] .research-panel > .event-body,
+  body[data-active-view="research"] .architecture-panel > .event-body {
+    display: -webkit-box;
+    margin-bottom: 8px;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  body[data-active-view="research"] .executive-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 152px;
+    overflow: auto;
+    padding-right: 2px;
+  }
+
+  body[data-active-view="research"] .architecture-detail-group,
+  body[data-active-view="research"] .research-detail-group {
+    margin-top: 7px;
+    flex: 0 0 auto;
+  }
+
+  body[data-active-view="research"] .architecture-detail-group summary,
+  body[data-active-view="research"] .research-detail-group summary {
+    min-height: 34px;
+    padding: 8px 10px;
+    color: #1d2939;
+    font-weight: 900;
+  }
+
+  body[data-active-view="research"] .architecture-detail-group[open],
+  body[data-active-view="research"] .research-detail-group[open] {
+    max-height: min(58vh, 520px);
+    border-color: #c8d6e6;
+    background: #ffffff;
+  }
+
+  body[data-active-view="research"] .architecture-detail-group[open] summary,
+  body[data-active-view="research"] .research-detail-group[open] summary {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    border-bottom: 1px solid #e3ebf4;
+    background: #ffffff;
+  }
+
+  body[data-active-view="ops"] .view-section,
+  body[data-active-view="evidence"] .view-section {
+    border-radius: 8px;
+  }
+}
+
+@media (min-width: 860px) {
+  body[data-active-view="research"] .research-panel,
+  body[data-active-view="research"] .architecture-panel {
+    height: calc(100vh - 214px);
+    max-height: calc(100vh - 214px);
+  }
+}
+
+@media (min-width: 1040px) {
+  body[data-active-view="research"] .research-panel,
+  body[data-active-view="research"] .architecture-panel {
+    height: calc(100vh - 202px);
+    max-height: calc(100vh - 202px);
+  }
+}
+
+@media (max-width: 759px) {
+  .section-index {
+    margin-top: 6px;
+    padding: 8px;
+  }
+
+  .section-index-buttons {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .section-index-buttons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .section-index-button {
+    flex: 0 0 auto;
+    max-width: 78vw;
+  }
+}
