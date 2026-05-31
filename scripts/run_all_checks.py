@@ -346,6 +346,7 @@ def main() -> int:
                 "scripts/check_local_readiness_api.py",
                 "scripts/check_local_readiness_stale.py",
                 "scripts/check_check_runner_timeout.py",
+                "scripts/check_go_live_gate_local_readiness.py",
                 "scripts/live_env_profile.py",
                 "scripts/check_live_env_profile.py",
                 "scripts/export_live_launch_plan.py",
@@ -468,6 +469,7 @@ def main() -> int:
     steps.append(run_step("server_live_readiness_cancel", [PYTHON, "scripts/check_server_live_readiness_cancel.py"], timeout=45))
     steps.append(run_step("local_readiness_stale", [PYTHON, "scripts/check_local_readiness_stale.py"], timeout=30))
     steps.append(run_step("check_runner_timeout", [PYTHON, "scripts/check_check_runner_timeout.py"], timeout=20))
+    steps.append(run_step("go_live_gate_local_readiness", [PYTHON, "scripts/check_go_live_gate_local_readiness.py"], timeout=30))
     steps.append(run_step("ai_operator_schema", [PYTHON, "scripts/check_ai_operator_schema.py"], timeout=30))
     steps.append(run_step("audit_chain", [PYTHON, "scripts/check_audit_chain.py"], timeout=60))
     steps.append(run_step("backup_state", [PYTHON, "scripts/check_backup_state.py"], timeout=60))

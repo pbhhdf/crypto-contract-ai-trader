@@ -75,6 +75,7 @@ def validate_gate(gate: dict[str, Any], enabled_modes: list[str]) -> str | None:
         "alert_watchdog",
         "exchange_recovery",
         "private_user_stream",
+        "local_readiness",
         "testnet_drill_cycles",
         "backtest_walkforward",
         "live_arming",

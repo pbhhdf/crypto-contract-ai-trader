@@ -151,6 +151,7 @@ EXCHANGE_RECOVERY_STALE_SECONDS = env_int("EXCHANGE_RECOVERY_STALE_SECONDS", 360
 EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS = env_int("EXCHANGE_ACCOUNT_SNAPSHOT_MAX_AGE_SECONDS", 30, 1, 3600)
 EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS = env_int("EXECUTION_MARKET_SNAPSHOT_MAX_AGE_SECONDS", 60, 1, 3600)
 LOCAL_READINESS_STALE_SECONDS = env_int("LOCAL_READINESS_STALE_SECONDS", 300, 30, 86400)
+GO_LIVE_LOCAL_READINESS_MAX_AGE_HOURS = env_int("GO_LIVE_LOCAL_READINESS_MAX_AGE_HOURS", 24, 1, 8760)
 ALERT_WEBHOOK_ENABLED = env_bool("ALERT_WEBHOOK_ENABLED", False)
 ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "").strip()
 ALERT_WEBHOOK_SECRET = os.getenv("ALERT_WEBHOOK_SECRET", "").strip()
@@ -6632,6 +6633,72 @@ def go_live_gate_status() -> dict[str, Any]:
             else "本地模式不要求私有入口；服务器实盘仍会强制检查 TRADER_BIND_IP。"
         ),
         {"app_env": APP_ENV, "trader_bind_ip": TRADER_BIND_IP, "bind_profile": bind_profile},
+    )
+    local_readiness = local_readiness_report_status(limit=5)
+    local_readiness_required = True
+    local_report_age = seconds_since(str(local_readiness.get("updated_at") or ""))
+    local_report_max_age = GO_LIVE_LOCAL_READINESS_MAX_AGE_HOURS * 60 * 60
+    local_readiness_complete = (
+        local_readiness.get("exists") is True
+        and local_readiness.get("status") == "completed"
+        and local_readiness.get("ok") is True
+        and local_readiness.get("readiness_overall") in {"pass", "warn"}
+    )
+    local_readiness_fresh = local_report_age is not None and local_report_age <= local_report_max_age
+    if local_readiness_complete and local_readiness_fresh:
+        local_readiness_status = "pass"
+        local_readiness_detail = (
+            f"最近一次全量验收已完成，readiness={local_readiness.get('readiness_overall') or '-'}，"
+            f"更新时间 {local_readiness.get('updated_at') or '-'}。"
+        )
+    elif local_readiness.get("status") == "interrupted":
+        local_readiness_status = "fail"
+        local_readiness_detail = (
+            local_readiness.get("interrupted_reason")
+            or "全量验收报告已中断；必须重新跑完 scripts/run_all_checks.py。"
+        )
+    elif local_readiness.get("exists") is not True:
+        local_readiness_status = "fail"
+        local_readiness_detail = "尚未找到全量验收报告；实盘前必须跑完 scripts/run_all_checks.py。"
+    elif not local_readiness_fresh:
+        local_readiness_status = "fail"
+        local_readiness_detail = (
+            f"最近一次全量验收报告已超过 {GO_LIVE_LOCAL_READINESS_MAX_AGE_HOURS} 小时；"
+            "实盘前必须重新生成。"
+        )
+    else:
+        local_readiness_status = "fail"
+        local_readiness_detail = (
+            f"全量验收未通过或未完成：status={local_readiness.get('status') or '-'}，"
+            f"失败项={local_readiness.get('failed_step_count') or 0}，"
+            f"readiness={local_readiness.get('readiness_overall') or '-'}。"
+        )
+    add_gate(
+        "local_readiness",
+        "本地全量验收",
+        local_readiness_status,
+        local_readiness_detail,
+        {
+            "local_readiness": {
+                key: local_readiness.get(key)
+                for key in (
+                    "exists",
+                    "ok",
+                    "status",
+                    "raw_status",
+                    "interrupted",
+                    "interrupted_step",
+                    "failed_step_count",
+                    "timed_out_steps",
+                    "readiness_overall",
+                    "updated_at",
+                    "report_path",
+                )
+            },
+            "age_seconds": local_report_age,
+            "max_age_seconds": local_report_max_age,
+        },
+        required_for_live=local_readiness_required,
     )
     attestation = live_attestation_status()
     attestation_required = live_requested or live_mode_enabled
