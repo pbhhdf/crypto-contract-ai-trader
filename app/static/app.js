@@ -292,14 +292,71 @@ let goLiveGateLoading = false;
 let goLiveGateLoadedAt = 0;
 const activeViewStorageKey = "cryptoTrader.activeView";
 
+const viewMeta = {
+  overview: {
+    kicker: "实时总览",
+    title: "今日处置台",
+    summary: "门禁、阻塞、资金、系统边界同屏。",
+    focus: "先看阻塞项，再处理快捷动作",
+  },
+  ai: {
+    kicker: "人机协作",
+    title: "AI 操作员",
+    summary: "对话生成检查、交接、部署包和受控建议。",
+    focus: "AI 可辅助操作，交易边界仍由风控和 OMS 决定",
+  },
+  live: {
+    kicker: "上线门禁",
+    title: "实盘准入",
+    summary: "处理实盘锁、授权、首单、上线包和终检。",
+    focus: "默认锁定，未满足门禁不会触发真实订单",
+  },
+  trading: {
+    kicker: "执行观察",
+    title: "交易工作台",
+    summary: "运行、行情、意图、风控、持仓和订单同屏。",
+    focus: "适合盯盘、复盘和纸交易验证",
+  },
+  risk: {
+    kicker: "确定性控制",
+    title: "风控中心",
+    summary: "配置杠杆、名义金额、日亏损和停机动作。",
+    focus: "所有交易意图必须先过这里",
+  },
+  backtest: {
+    kicker: "策略实验",
+    title: "回测实验室",
+    summary: "单次回测、参数比较和样本外验证。",
+    focus: "先看回撤和样本外，再看收益",
+  },
+  ops: {
+    kicker: "服务运维",
+    title: "调度与恢复",
+    summary: "管理调度、Testnet、交易所同步和告警。",
+    focus: "服务器运行时优先看这里",
+  },
+  evidence: {
+    kicker: "证据链",
+    title: "检查与审计",
+    summary: "查看就绪、审计哈希链和原始事件流。",
+    focus: "用于排障、交接和上线复核",
+  },
+  research: {
+    kicker: "系统蓝图",
+    title: "架构与研究",
+    summary: "研究工件、治理边界、实体关系和验收门槛。",
+    focus: "长内容已收进本地滚动面板",
+  },
+};
+
 const viewGroups = {
-  overview: [".action-board", ".overview-grid", ".account-grid"],
+  overview: [".action-board", ".overview-grid", ".account-grid", ".system-grid"],
   ai: [".ai-operator-panel"],
   live: [".live-gate-panel"],
   trading: [".metrics-grid", ".workflow-workspace", ".intent-workspace", ".positions-panel", ".orders-panel"],
   risk: [".risk-panel"],
   backtest: [".backtest-panel"],
-  ops: [".system-grid", ".scheduler-panel", ".testnet-drill-panel", ".exchange-recovery-panel", ".alert-panel"],
+  ops: [".scheduler-panel", ".testnet-drill-panel", ".exchange-recovery-panel", ".alert-panel"],
   evidence: [".readiness-panel", ".audit-chain-panel", ".raw-log-panel"],
   research: [".research-panel", ".architecture-panel"],
 };
@@ -309,6 +366,19 @@ function initializeViewSwitcher() {
   const switcher = document.querySelector(".view-switcher");
   const stage = document.createElement("section");
   stage.className = "view-stage";
+  const context = document.createElement("section");
+  context.className = "view-context";
+  context.innerHTML = `
+    <div class="view-context-copy">
+      <span id="view-kicker">实时总览</span>
+      <strong id="view-title">今日处置台</strong>
+      <small id="view-summary">门禁、阻塞、资金、系统边界同屏。</small>
+    </div>
+    <div class="view-context-focus">
+      <span>当前焦点</span>
+      <b id="view-focus">先看阻塞项，再处理快捷动作</b>
+    </div>
+  `;
   const sections = new Set();
   Object.entries(viewGroups).forEach(([view, selectors]) => {
     selectors.forEach((selector) => {
@@ -321,8 +391,15 @@ function initializeViewSwitcher() {
   });
   if (switcher) {
     switcher.insertAdjacentElement("afterend", stage);
+    stage.appendChild(context);
     sections.forEach((section) => stage.appendChild(section));
   }
+  const contextEls = {
+    kicker: context.querySelector("#view-kicker"),
+    title: context.querySelector("#view-title"),
+    summary: context.querySelector("#view-summary"),
+    focus: context.querySelector("#view-focus"),
+  };
   function storedView() {
     try {
       return window.localStorage.getItem(activeViewStorageKey);
@@ -339,7 +416,13 @@ function initializeViewSwitcher() {
   }
   function activate(view, persist = true) {
     const nextView = viewGroups[view] ? view : "overview";
+    const meta = viewMeta[nextView] || viewMeta.overview;
     document.body.dataset.activeView = nextView;
+    context.dataset.activeView = nextView;
+    contextEls.kicker.textContent = meta.kicker;
+    contextEls.title.textContent = meta.title;
+    contextEls.summary.textContent = meta.summary;
+    contextEls.focus.textContent = meta.focus;
     tabs.forEach((tab) => {
       const active = tab.dataset.viewTarget === nextView;
       tab.classList.toggle("active", active);
