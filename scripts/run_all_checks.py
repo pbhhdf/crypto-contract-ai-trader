@@ -343,6 +343,7 @@ def main() -> int:
                 "scripts/check_server_live_readiness_runner.py",
                 "scripts/check_server_live_readiness_cancel.py",
                 "scripts/check_server_live_readiness_api.py",
+                "scripts/check_local_readiness_api.py",
                 "scripts/check_check_runner_timeout.py",
                 "scripts/live_env_profile.py",
                 "scripts/check_live_env_profile.py",
@@ -526,6 +527,7 @@ def main() -> int:
         )
         steps.append(run_server_step("walkforward_quality_gate", [PYTHON, "scripts/check_walkforward_quality_gate.py"], timeout=120))
         steps.append(run_server_step("final_live_ready_api", [PYTHON, "scripts/check_final_live_ready_api.py"], timeout=120))
+        steps.append(run_server_step("local_readiness_api", [PYTHON, "scripts/check_local_readiness_api.py"], timeout=120))
         steps.append(
             run_server_step("server_live_readiness_api", [PYTHON, "scripts/check_server_live_readiness_api.py"], timeout=150)
         )

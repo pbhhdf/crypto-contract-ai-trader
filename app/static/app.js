@@ -135,6 +135,12 @@ const els = {
   auditChainBroken: document.querySelector("#audit-chain-broken"),
   auditChainHash: document.querySelector("#audit-chain-hash"),
   auditChainRecent: document.querySelector("#audit-chain-recent"),
+  localReadinessStatus: document.querySelector("#local-readiness-status"),
+  localReadinessCurrent: document.querySelector("#local-readiness-current"),
+  localReadinessCount: document.querySelector("#local-readiness-count"),
+  localReadinessFailed: document.querySelector("#local-readiness-failed"),
+  localReadinessPath: document.querySelector("#local-readiness-path"),
+  localReadinessSteps: document.querySelector("#local-readiness-steps"),
   alertStatus: document.querySelector("#alert-status"),
   alertSummary: document.querySelector("#alert-summary"),
   alertList: document.querySelector("#alert-list"),
@@ -358,7 +364,7 @@ const viewGroups = {
   risk: [".risk-panel"],
   backtest: [".backtest-panel"],
   ops: [".scheduler-panel", ".testnet-drill-panel", ".exchange-recovery-panel", ".alert-panel"],
-  evidence: [".readiness-panel", ".audit-chain-panel", ".raw-log-panel"],
+  evidence: [".readiness-panel", ".local-readiness-panel", ".audit-chain-panel", ".raw-log-panel"],
   research: [".research-panel", ".architecture-panel"],
 };
 
@@ -973,6 +979,65 @@ function renderReadiness(readiness) {
       `,
     )
     .join("");
+}
+
+function localReadinessStatusText(report) {
+  if (!report || report.exists === false) return "尚未生成";
+  if (report.status === "running") return "运行中";
+  if (report.status === "completed" && report.ok === true) return "已完成";
+  if (report.status === "completed" && report.ok === false) return "有失败项";
+  if (report.status === "error") return "读取失败";
+  return report.status || "未知";
+}
+
+function localReadinessStepStatusText(status) {
+  const map = {
+    starting: "启动中",
+    running: "运行中",
+    done: "已完成",
+    completed: "已完成",
+  };
+  return map[status] || status || "";
+}
+
+function renderLocalReadiness(report) {
+  if (!els.localReadinessStatus) return;
+  if (!report || report.exists === false) {
+    els.localReadinessStatus.textContent = "尚未生成";
+    els.localReadinessCurrent.textContent = "-";
+    els.localReadinessCount.textContent = "0";
+    els.localReadinessFailed.textContent = "-";
+    els.localReadinessPath.textContent = "运行全量检查脚本后会生成验收进度报告";
+    els.localReadinessSteps.innerHTML = `<article class="guidance-card"><strong>暂无验收报告</strong><p>全量检查运行时，这里会显示当前步骤和最近完成项。</p></article>`;
+    return;
+  }
+  const current = report.current_step || {};
+  const currentName = current.name || (report.status === "completed" ? "完成" : "-");
+  const currentStatus = current.status ? ` / ${localReadinessStepStatusText(current.status)}` : "";
+  const failedCount = Number(report.failed_step_count || 0);
+  const timedOut = report.timed_out_steps || [];
+  const lastSteps = report.last_steps || [];
+  els.localReadinessStatus.textContent = localReadinessStatusText(report);
+  els.localReadinessCurrent.textContent = `${currentName}${currentStatus}`;
+  els.localReadinessCount.textContent = fmt(report.completed_step_count || lastSteps.length || 0);
+  els.localReadinessFailed.textContent = `${fmt(failedCount)} / 超时 ${fmt(timedOut.length)}`;
+  els.localReadinessPath.textContent = report.report_path
+    ? `报告：${report.report_path}`
+    : "尚未找到可读取的验收报告";
+  els.localReadinessSteps.innerHTML = lastSteps.length
+    ? lastSteps.map((step) => {
+        const badge = step.ok ? "pass" : step.timed_out ? "fail" : "warn";
+        const duration = step.duration_seconds === undefined || step.duration_seconds === null ? "-" : `${step.duration_seconds}s`;
+        const note = step.note ? `<p>${escapeHtml(step.note)}</p>` : "";
+        return `
+          <article class="guidance-card">
+            <strong>${escapeHtml(step.name || "-")}<span class="badge ${badge}">${step.ok ? "通过" : step.timed_out ? "超时" : "失败"}</span></strong>
+            <span>耗时 ${escapeHtml(duration)} / 退出码 ${escapeHtml(String(step.returncode ?? "-"))}</span>
+            ${note}
+          </article>
+        `;
+      }).join("")
+    : `<article class="guidance-card"><strong>等待步骤完成</strong><p>检查启动后会逐项写入进度报告。</p></article>`;
 }
 
 function renderAuditChain(audit) {
@@ -2961,6 +3026,7 @@ async function refresh() {
     if (data.readiness?.summary_only) {
       ensureReadinessLoaded();
     }
+    renderLocalReadiness(data.local_readiness);
     renderAuditChain(data.audit_chain);
     renderAlerts(data.alerts);
     renderExchangeRecovery(data.exchange_recovery);

@@ -856,6 +856,10 @@ body[data-active-view="overview"] .account-grid .metric:first-child {
   margin-top: 8px;
 }
 
+.local-readiness-panel {
+  margin-top: 8px;
+}
+
 .research-panel {
   margin-top: 8px;
 }
@@ -1231,6 +1235,7 @@ body[data-active-view="research"] .architecture-panel {
 .testnet-drill-facts,
 .live-gate-facts,
 .audit-chain-summary,
+.local-readiness-summary,
 .risk-facts,
 .oms-facts,
 .recovery-facts {
@@ -1345,6 +1350,7 @@ body[data-active-view="ops"] #testnet-drill-cycles article {
 .testnet-drill-facts article,
 .live-gate-facts article,
 .audit-chain-summary article,
+.local-readiness-summary article,
 .risk-facts article,
 .oms-facts article,
 .recovery-facts article {
@@ -1361,6 +1367,7 @@ body[data-active-view="ops"] #testnet-drill-cycles article {
 .testnet-drill-facts span,
 .live-gate-facts span,
 .audit-chain-summary span,
+.local-readiness-summary span,
 .risk-facts span,
 .oms-facts span,
 .recovery-facts span {
@@ -1372,11 +1379,23 @@ body[data-active-view="ops"] #testnet-drill-cycles article {
 .testnet-drill-facts strong,
 .live-gate-facts strong,
 .audit-chain-summary strong,
+.local-readiness-summary strong,
 .risk-facts strong,
 .oms-facts strong,
 .recovery-facts strong {
   overflow-wrap: anywhere;
   font-size: 13px;
+}
+
+.local-readiness-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.local-readiness-path {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .readiness-list {
@@ -2431,6 +2450,7 @@ th {
   .attestation-checks,
   .attestation-actions,
   .audit-chain-summary,
+  .local-readiness-summary,
   .alert-card,
   .alert-actions,
   .live-gate-actions,
@@ -3426,6 +3446,7 @@ th {
   body[data-active-view="ops"] .exchange-recovery-panel,
   body[data-active-view="ops"] .alert-panel,
   body[data-active-view="evidence"] .readiness-panel,
+  body[data-active-view="evidence"] .local-readiness-panel,
   body[data-active-view="evidence"] .audit-chain-panel {
     display: flex;
     flex-direction: column;

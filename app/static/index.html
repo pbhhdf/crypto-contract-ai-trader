@@ -161,6 +161,35 @@
         </details>
       </section>
 
+      <section class="panel local-readiness-panel">
+        <div class="panel-heading">
+          <h2>本地验收进度</h2>
+          <span id="local-readiness-status">等待报告</span>
+        </div>
+        <div class="local-readiness-summary">
+          <article>
+            <span>当前步骤</span>
+            <strong id="local-readiness-current">-</strong>
+          </article>
+          <article>
+            <span>完成步骤</span>
+            <strong id="local-readiness-count">-</strong>
+          </article>
+          <article>
+            <span>失败 / 超时</span>
+            <strong id="local-readiness-failed">-</strong>
+          </article>
+        </div>
+        <div id="local-readiness-path" class="local-readiness-path">运行全量检查后会生成本地验收进度报告</div>
+        <details class="evidence-detail-group">
+          <summary>
+            <span>最近验收步骤</span>
+            <small>展开查看完成项、失败项和超时项</small>
+          </summary>
+        <div id="local-readiness-steps" class="guidance-grid"></div>
+        </details>
+      </section>
+
       <section class="panel audit-chain-panel">
         <div class="panel-heading">
           <h2>审计哈希链</h2>
@@ -1261,6 +1290,6 @@
       </section>
     </main>
 
-    <script src="/app.js?v=20260531-dashboard26"></script>
+    <script src="/app.js?v=20260531-dashboard27"></script>
   </body>
 </html>

@@ -2440,6 +2440,96 @@ def ai_operator_latest_report_path(pattern: str) -> str:
     return ai_operator_relative_path(max(matches, key=lambda item: item.stat().st_mtime))
 
 
+def _compact_local_readiness_step(step: dict[str, Any]) -> dict[str, Any]:
+    stderr = str(step.get("stderr") or "")
+    stdout = str(step.get("stdout") or "")
+    note = ""
+    if not step.get("ok") or step.get("timed_out"):
+        note = stderr.strip() or stdout.strip()
+    if len(note) > 220:
+        note = f"{note[:220]}..."
+    return {
+        "name": step.get("name") or "",
+        "ok": bool(step.get("ok")),
+        "returncode": step.get("returncode"),
+        "duration_seconds": step.get("duration_seconds"),
+        "timed_out": bool(step.get("timed_out")),
+        "note": note,
+    }
+
+
+def local_readiness_report_status(limit: int = 8) -> dict[str, Any]:
+    report_dir = ROOT_DIR / "reports"
+    active_path = report_dir / "local-readiness-active.json"
+    final_matches: list[Path] = []
+    if report_dir.exists():
+        final_matches = [
+            path
+            for path in report_dir.glob("local-readiness-*.json")
+            if path.name != "local-readiness-active.json" and not path.name.endswith(".partial.json")
+        ]
+    latest_path = max(final_matches, key=lambda item: item.stat().st_mtime) if final_matches else None
+    report_path = active_path if active_path.exists() else latest_path
+    if not report_path:
+        return {
+            "exists": False,
+            "status": "missing",
+            "active_report_path": ai_operator_relative_path(active_path),
+            "latest_report_path": "",
+            "report_path": "",
+            "current_step": {},
+            "completed_step_count": 0,
+            "failed_step_count": 0,
+            "failed_steps": [],
+            "timed_out_steps": [],
+            "last_steps": [],
+        }
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001 - report should be visible even when corrupt.
+        return {
+            "exists": True,
+            "status": "error",
+            "error": f"{exc.__class__.__name__}: {exc}",
+            "active_report_path": ai_operator_relative_path(active_path),
+            "latest_report_path": ai_operator_relative_path(latest_path) if latest_path else "",
+            "report_path": ai_operator_relative_path(report_path),
+            "current_step": {},
+            "completed_step_count": 0,
+            "failed_step_count": 0,
+            "failed_steps": [],
+            "timed_out_steps": [],
+            "last_steps": [],
+        }
+
+    steps = payload.get("steps") if isinstance(payload.get("steps"), list) else []
+    failed_steps = payload.get("failed_steps")
+    if not isinstance(failed_steps, list):
+        failed_steps = [step.get("name") for step in steps if not step.get("ok")]
+    timed_out_steps = [step.get("name") for step in steps if step.get("timed_out")]
+    capped_limit = max(1, min(50, int(limit or 8)))
+    readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
+    current_step = payload.get("current_step") if isinstance(payload.get("current_step"), dict) else {}
+    return {
+        "exists": True,
+        "ok": payload.get("ok"),
+        "status": payload.get("status") or ("completed" if "created_at" in payload else "unknown"),
+        "started_at": payload.get("started_at") or payload.get("created_at") or "",
+        "updated_at": payload.get("updated_at") or payload.get("created_at") or "",
+        "current_step": current_step,
+        "completed_step_count": payload.get("completed_step_count") or len(steps),
+        "failed_step_count": len(failed_steps),
+        "failed_steps": failed_steps[:20],
+        "timed_out_steps": timed_out_steps[:20],
+        "readiness_overall": readiness.get("overall") or "",
+        "final_report_path": payload.get("final_report_path") or "",
+        "active_report_path": ai_operator_relative_path(active_path) if active_path.exists() else "",
+        "latest_report_path": ai_operator_relative_path(latest_path) if latest_path else "",
+        "report_path": ai_operator_relative_path(report_path),
+        "last_steps": [_compact_local_readiness_step(step) for step in steps[-capped_limit:]],
+    }
+
+
 def ai_operator_system_action(action: dict[str, Any]) -> dict[str, Any]:
     action_type = str(action.get("type") or action.get("action") or "").lower().strip()
     if action_type == "readiness":
@@ -13628,6 +13718,7 @@ def latest_state(
         "positions": paper_state["positions"],
         "scheduler": measure("scheduler_status", scheduler_status),
         "testnet_drill": testnet_drill,
+        "local_readiness": measure("local_readiness_report_status", local_readiness_report_status),
         "server_live_readiness": measure("server_live_readiness_status", server_live_readiness_status),
         "live_env_profile": measure("live_env_profile_status", live_env_profile_status),
         "go_live_gate": go_live_gate,
@@ -13736,6 +13827,14 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/readiness":
             self.send_json(deployment_readiness())
+            return
+        if parsed.path == "/api/local-readiness":
+            params = parse_qs(parsed.query)
+            try:
+                limit = min(50, max(1, int(params.get("limit", ["8"])[0])))
+            except ValueError:
+                limit = 8
+            self.send_json({"local_readiness": local_readiness_report_status(limit=limit)})
             return
         if parsed.path == "/api/risk":
             self.send_json({"risk": risk_config(), "account": paper_account_state()["account"]})
