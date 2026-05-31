@@ -188,6 +188,7 @@ const els = {
   exportServerGoLiveAudit: document.querySelector("#export-server-go-live-audit"),
   checkFinalLiveReady: document.querySelector("#check-final-live-ready"),
   runServerLiveReadiness: document.querySelector("#run-server-live-readiness"),
+  cancelServerLiveReadiness: document.querySelector("#cancel-server-live-readiness"),
   serverLiveReadinessTestnet: document.querySelector("#server-live-readiness-testnet"),
   serverLiveReadinessStatus: document.querySelector("#server-live-readiness-status"),
   serverLiveReadinessStarted: document.querySelector("#server-live-readiness-started"),
@@ -1772,6 +1773,9 @@ function renderServerLiveReadiness(status) {
   }
   if (els.runServerLiveReadiness) {
     els.runServerLiveReadiness.disabled = Boolean(value.running);
+  }
+  if (els.cancelServerLiveReadiness) {
+    els.cancelServerLiveReadiness.disabled = !value.running;
   }
 }
 
@@ -3421,6 +3425,21 @@ els.runServerLiveReadiness.addEventListener("click", async () => {
     if (!started) {
       els.runServerLiveReadiness.disabled = false;
     }
+  }
+});
+
+els.cancelServerLiveReadiness.addEventListener("click", async () => {
+  els.cancelServerLiveReadiness.disabled = true;
+  try {
+    const result = await postJson("/api/server-live-readiness/cancel", {
+      reason: "manual_dashboard_cancel",
+    });
+    renderServerLiveReadiness(result.server_live_readiness);
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    els.cancelServerLiveReadiness.disabled = false;
   }
 });
 

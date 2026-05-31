@@ -332,6 +332,8 @@ USER_STREAM_STOP = threading.Event()
 USER_STREAM_THREAD: threading.Thread | None = None
 SERVER_LIVE_READINESS_LOCK = threading.Lock()
 SERVER_LIVE_READINESS_THREAD: threading.Thread | None = None
+SERVER_LIVE_READINESS_PROCESS: subprocess.Popen[str] | None = None
+SERVER_LIVE_READINESS_CANCEL = threading.Event()
 BINANCE_SYMBOL_RULES_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
 BINANCE_SYMBOL_RULES_LOCK = threading.Lock()
 
@@ -2596,6 +2598,9 @@ def ai_operator_system_action(action: dict[str, Any]) -> dict[str, Any]:
         }
     if action_type == "server_live_readiness":
         return {"action": "server_live_readiness", **server_live_readiness_status()}
+    if action_type == "server_live_readiness_cancel":
+        reason = str(action.get("reason") or "ai_operator_cancel").strip()
+        return {"action": "server_live_readiness_cancel", "status": cancel_server_live_readiness(reason)}
     if action_type == "live_env_profile":
         target = str(action.get("target") or "live_guarded").strip() or "live_guarded"
         return {"action": "live_env_profile", "profile": live_env_profile_status(target)}
@@ -2737,6 +2742,7 @@ def apply_ai_operator_actions(actions: list[dict[str, Any]]) -> list[dict[str, A
             "live_launch_kit",
             "live_env_pack",
             "server_live_readiness_run",
+            "server_live_readiness_cancel",
             "server_bundle",
             "server_audit",
         }:
@@ -2926,6 +2932,13 @@ def parse_ai_operator_direct_actions(message: str) -> list[dict[str, Any]] | Non
             elif part in {"--mode", "--testnet-mode"} and index + 1 < len(parts):
                 options["testnet_mode"] = parts[index + 1]
         return [options]
+    if text.startswith("/server-readiness-cancel"):
+        parts = text.removeprefix("/server-readiness-cancel").strip().split()
+        reason = "ai_operator_server_readiness_cancel"
+        for index, part in enumerate(parts):
+            if part == "--reason" and index + 1 < len(parts):
+                reason = parts[index + 1]
+        return [{"type": "server_live_readiness_cancel", "reason": reason}]
     if text.startswith("/server-readiness"):
         return [{"type": "server_live_readiness"}]
     if text.startswith("/env-audit") or text.startswith("/live-env"):
@@ -3044,6 +3057,7 @@ def ai_operator_status() -> dict[str, Any]:
             "/panic-stop --confirm PANIC_STOP [--no-cancel] [--no-exchange-cancel] [--flatten --flatten-confirm FLATTEN_POSITIONS]",
             "/server-readiness",
             "/server-readiness-run [--real] [--testnet] [--mode binance_testnet_validate|binance_testnet_place_order] [--allow-testnet-placement] [--cycles N] [--interval seconds] [--timeout seconds] [--strict]",
+            "/server-readiness-cancel [--reason text]",
             "/env-audit [mvp_server|testnet_validate|testnet_place|live_guarded]",
             "/launch-plan",
             "/handoff [symbol]",
@@ -3100,6 +3114,7 @@ AI_OPERATOR_ACTION_TYPES = [
     "live_attestation_clear",
     "panic_stop",
     "server_live_readiness",
+    "server_live_readiness_cancel",
     "live_env_profile",
     "live_launch_plan",
     "live_ops_handoff",
@@ -12938,9 +12953,12 @@ def live_ops_handoff_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
 
 
 def server_live_readiness_status() -> dict[str, Any]:
-    global SERVER_LIVE_READINESS_THREAD
+    global SERVER_LIVE_READINESS_THREAD, SERVER_LIVE_READINESS_PROCESS
     with SERVER_LIVE_READINESS_LOCK:
         running = SERVER_LIVE_READINESS_THREAD is not None and SERVER_LIVE_READINESS_THREAD.is_alive()
+        process = SERVER_LIVE_READINESS_PROCESS
+        pid = process.pid if process is not None and process.poll() is None else None
+        cancel_requested = SERVER_LIVE_READINESS_CANCEL.is_set()
     status = get_setting("server_live_readiness_status", "idle")
     if running:
         status = "running"
@@ -12952,13 +12970,28 @@ def server_live_readiness_status() -> dict[str, Any]:
         options = json.loads(get_setting("server_live_readiness_last_options", "{}") or "{}")
     except json.JSONDecodeError:
         options = {}
+    completed_at = get_setting("server_live_readiness_completed_at", "")
+    last_error = get_setting("server_live_readiness_last_error", "")
+    if not running and status == "running":
+        stale_error = str(summary.get("error") or last_error or "Server live-readiness runner stopped without a final status.")
+        repaired_status = "canceled" if "Canceled by operator request" in stale_error else "failed"
+        status = repaired_status
+        set_setting("server_live_readiness_status", repaired_status)
+        if not completed_at:
+            completed_at = utc_now()
+            set_setting("server_live_readiness_completed_at", completed_at)
+        if not last_error:
+            last_error = stale_error
+            set_setting("server_live_readiness_last_error", last_error)
     return {
         "status": status,
         "running": running,
+        "pid": pid,
+        "cancel_requested": cancel_requested,
         "run_id": get_setting("server_live_readiness_run_id", ""),
         "started_at": get_setting("server_live_readiness_started_at", ""),
-        "completed_at": get_setting("server_live_readiness_completed_at", ""),
-        "last_error": get_setting("server_live_readiness_last_error", ""),
+        "completed_at": completed_at,
+        "last_error": last_error,
         "last_report_path": get_setting("server_live_readiness_last_report_path", ""),
         "last_summary": summary,
         "last_options": options,
@@ -12989,8 +13022,40 @@ def server_live_readiness_command(options: dict[str, Any]) -> list[str]:
     return command
 
 
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                cwd=ROOT_DIR,
+                text=True,
+                capture_output=True,
+                timeout=10,
+            )
+        else:
+            process.terminate()
+        process.wait(timeout=5)
+    except Exception:
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except Exception:
+            pass
+
+
+def collect_process_output(process: subprocess.Popen[str]) -> tuple[str, str]:
+    try:
+        stdout, stderr = process.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        terminate_process_tree(process)
+        stdout, stderr = process.communicate(timeout=5)
+    return stdout or "", stderr or ""
+
+
 def run_server_live_readiness_background(run_id: str, options: dict[str, Any]) -> None:
-    global SERVER_LIVE_READINESS_THREAD
+    global SERVER_LIVE_READINESS_THREAD, SERVER_LIVE_READINESS_PROCESS
     command = server_live_readiness_command(options)
     timeout_seconds = int(safe_float(options.get("timeout_seconds"), 1800.0))
     timeout_seconds = max(60, min(86400, timeout_seconds))
@@ -13009,28 +13074,110 @@ def run_server_live_readiness_background(run_id: str, options: dict[str, Any]) -
         {"command": command, "options": options},
     )
     started = time.time()
+    process: subprocess.Popen[str] | None = None
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=ROOT_DIR,
             text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
-        stdout, stdout_truncated = ai_operator_truncate_output(completed.stdout)
-        stderr, stderr_truncated = ai_operator_truncate_output(completed.stderr)
+        with SERVER_LIVE_READINESS_LOCK:
+            SERVER_LIVE_READINESS_PROCESS = process
+        canceled = False
+        timed_out = False
+        while True:
+            if SERVER_LIVE_READINESS_CANCEL.is_set():
+                canceled = True
+                terminate_process_tree(process)
+                break
+            if process.poll() is not None:
+                break
+            if time.time() - started > timeout_seconds:
+                timed_out = True
+                terminate_process_tree(process)
+                break
+            time.sleep(0.25)
+        raw_stdout, raw_stderr = collect_process_output(process)
+        if canceled:
+            stdout, stdout_truncated = ai_operator_truncate_output(raw_stdout)
+            stderr, stderr_truncated = ai_operator_truncate_output(raw_stderr)
+            error = "Canceled by operator request."
+            summary = {
+                "ok": False,
+                "final_live_ready": False,
+                "blocking_gates": [],
+                "error": error,
+            }
+            set_setting("server_live_readiness_status", "canceled")
+            set_setting("server_live_readiness_completed_at", utc_now())
+            set_setting("server_live_readiness_last_error", error)
+            set_setting("server_live_readiness_last_summary", json.dumps(summary, ensure_ascii=False))
+            insert_event(
+                run_id,
+                "system",
+                "Server Live Readiness",
+                "服务器准入推进器已取消",
+                error,
+                {
+                    "run_id": run_id,
+                    "command": command,
+                    "returncode": process.returncode,
+                    "duration_seconds": round(time.time() - started, 2),
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "stdout_truncated": stdout_truncated,
+                    "stderr_truncated": stderr_truncated,
+                },
+            )
+            return
+        if timed_out:
+            stdout, stdout_truncated = ai_operator_truncate_output(raw_stdout)
+            stderr, stderr_truncated = ai_operator_truncate_output(raw_stderr)
+            error = f"Timed out after {timeout_seconds}s"
+            summary = {
+                "ok": False,
+                "final_live_ready": False,
+                "blocking_gates": [],
+                "error": error,
+            }
+            set_setting("server_live_readiness_status", "failed")
+            set_setting("server_live_readiness_completed_at", utc_now())
+            set_setting("server_live_readiness_last_error", error)
+            set_setting("server_live_readiness_last_summary", json.dumps(summary, ensure_ascii=False))
+            insert_event(
+                run_id,
+                "error",
+                "Server Live Readiness",
+                "服务器准入推进器超时",
+                error,
+                {
+                    "run_id": run_id,
+                    "command": command,
+                    "returncode": process.returncode,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "stdout_truncated": stdout_truncated,
+                    "stderr_truncated": stderr_truncated,
+                },
+            )
+            return
+        stdout, stdout_truncated = ai_operator_truncate_output(raw_stdout)
+        stderr, stderr_truncated = ai_operator_truncate_output(raw_stderr)
         try:
-            summary = json.loads(completed.stdout or "{}")
+            summary = json.loads(raw_stdout or "{}")
         except json.JSONDecodeError:
             summary = {}
         report_path = str(summary.get("report_path") or "")
-        status = "completed" if completed.returncode == 0 else "failed"
-        error = "" if completed.returncode == 0 else (stderr or stdout or f"returncode={completed.returncode}")
+        returncode = int(process.returncode or 0)
+        status = "completed" if returncode == 0 else "failed"
+        error = "" if returncode == 0 else (stderr or stdout or f"returncode={returncode}")
         payload = {
             "run_id": run_id,
             "status": status,
             "command": command,
-            "returncode": completed.returncode,
+            "returncode": returncode,
             "duration_seconds": round(time.time() - started, 2),
             "stdout": stdout,
             "stderr": stderr,
@@ -13046,16 +13193,14 @@ def run_server_live_readiness_background(run_id: str, options: dict[str, Any]) -
         set_setting("server_live_readiness_last_report_path", report_path)
         insert_event(
             run_id,
-            "system" if completed.returncode == 0 else "error",
+            "system" if returncode == 0 else "error",
             "Server Live Readiness",
-            "服务器准入推进器已完成" if completed.returncode == 0 else "服务器准入推进器失败",
+            "服务器准入推进器已完成" if returncode == 0 else "服务器准入推进器失败",
             f"状态={status}，最终实盘就绪={summary.get('final_live_ready')}，阻塞项={summary.get('blocking_gates')}",
             payload,
         )
-    except subprocess.TimeoutExpired as exc:
-        stdout, stdout_truncated = ai_operator_truncate_output(exc.stdout)
-        stderr, stderr_truncated = ai_operator_truncate_output(exc.stderr)
-        error = f"Timed out after {timeout_seconds}s"
+    except Exception as exc:
+        error = str(exc) or exc.__class__.__name__
         summary = {
             "ok": False,
             "final_live_ready": False,
@@ -13070,27 +13215,30 @@ def run_server_live_readiness_background(run_id: str, options: dict[str, Any]) -
             run_id,
             "error",
             "Server Live Readiness",
-            "服务器准入推进器超时",
+            "Server live-readiness runner crashed",
             error,
             {
                 "run_id": run_id,
                 "command": command,
-                "stdout": stdout,
-                "stderr": stderr,
-                "stdout_truncated": stdout_truncated,
-                "stderr_truncated": stderr_truncated,
+                "duration_seconds": round(time.time() - started, 2),
             },
         )
     finally:
+        if process is not None and process.poll() is None:
+            terminate_process_tree(process)
         with SERVER_LIVE_READINESS_LOCK:
+            SERVER_LIVE_READINESS_PROCESS = None
             SERVER_LIVE_READINESS_THREAD = None
+            SERVER_LIVE_READINESS_CANCEL.clear()
 
 
 def start_server_live_readiness(options: dict[str, Any]) -> dict[str, Any]:
-    global SERVER_LIVE_READINESS_THREAD
+    global SERVER_LIVE_READINESS_THREAD, SERVER_LIVE_READINESS_PROCESS
     with SERVER_LIVE_READINESS_LOCK:
         if SERVER_LIVE_READINESS_THREAD is not None and SERVER_LIVE_READINESS_THREAD.is_alive():
             raise RuntimeError("Server live-readiness runner is already active.")
+        SERVER_LIVE_READINESS_CANCEL.clear()
+        SERVER_LIVE_READINESS_PROCESS = None
         run_id = f"SLR-{uuid.uuid4().hex[:8].upper()}"
         thread = threading.Thread(
             target=run_server_live_readiness_background,
@@ -13099,8 +13247,35 @@ def start_server_live_readiness(options: dict[str, Any]) -> dict[str, Any]:
         )
         SERVER_LIVE_READINESS_THREAD = thread
         thread.start()
-    time.sleep(0.05)
-    return server_live_readiness_status()
+    deadline = time.time() + 1.5
+    status = server_live_readiness_status()
+    while status.get("running") and not status.get("pid") and time.time() < deadline:
+        time.sleep(0.03)
+        status = server_live_readiness_status()
+    return status
+
+
+def cancel_server_live_readiness(reason: str = "manual_cancel") -> dict[str, Any]:
+    clean_reason = str(reason or "manual_cancel").strip()[:200]
+    with SERVER_LIVE_READINESS_LOCK:
+        running = SERVER_LIVE_READINESS_THREAD is not None and SERVER_LIVE_READINESS_THREAD.is_alive()
+        process = SERVER_LIVE_READINESS_PROCESS
+        pid = process.pid if process is not None and process.poll() is None else None
+        if running:
+            SERVER_LIVE_READINESS_CANCEL.set()
+    if running:
+        insert_event(
+            get_setting("server_live_readiness_run_id", "system") or "system",
+            "system",
+            "Server Live Readiness",
+            "服务器准入推进器收到取消请求",
+            f"原因={clean_reason}",
+            {"reason": clean_reason, "pid": pid},
+        )
+    status = server_live_readiness_status()
+    status["cancel_requested_now"] = running
+    status["cancel_reason"] = clean_reason
+    return status
 
 
 def go_live_report() -> dict[str, Any]:
@@ -13846,6 +14021,12 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             except ValueError as exc:
                 self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path == "/api/server-live-readiness/cancel":
+            body = self.read_json()
+            status = cancel_server_live_readiness(str(body.get("reason") or "api_cancel"))
+            code = HTTPStatus.ACCEPTED if status.get("cancel_requested_now") else HTTPStatus.OK
+            self.send_json({"server_live_readiness": status}, code)
             return
         if parsed.path == "/api/go-live-gate/check":
             gate = go_live_gate_status()

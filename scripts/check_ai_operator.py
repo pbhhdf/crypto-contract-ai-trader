@@ -94,6 +94,7 @@ def main() -> int:
         "/panic-stop --confirm PANIC_STOP [--no-cancel] [--no-exchange-cancel] [--flatten --flatten-confirm FLATTEN_POSITIONS]",
         "/server-readiness",
         "/server-readiness-run [--real] [--testnet] [--mode binance_testnet_validate|binance_testnet_place_order] [--allow-testnet-placement] [--cycles N] [--interval seconds] [--timeout seconds] [--strict]",
+        "/server-readiness-cancel [--reason text]",
         "/env-audit [mvp_server|testnet_validate|testnet_place|live_guarded]",
         "/launch-plan",
         "/handoff [symbol]",
@@ -191,6 +192,13 @@ def main() -> int:
     server_readiness_result = request_json("POST", "/api/ai-operator/chat", {"message": "/server-readiness"})
     if '"action": "server_live_readiness"' not in json.dumps(server_readiness_result, ensure_ascii=False):
         return fail("AI operator server-readiness command did not return server_live_readiness action")
+    server_readiness_cancel_result = request_json(
+        "POST",
+        "/api/ai-operator/chat",
+        {"message": "/server-readiness-cancel --reason ai_operator_smoke_idle"},
+    )
+    if '"action": "server_live_readiness_cancel"' not in json.dumps(server_readiness_cancel_result, ensure_ascii=False):
+        return fail("AI operator server-readiness-cancel command did not return server_live_readiness_cancel action")
     env_audit_result = request_json("POST", "/api/ai-operator/chat", {"message": "/env-audit live_guarded"})
     serialized_env_audit = json.dumps(env_audit_result, ensure_ascii=False)
     if '"action": "live_env_profile"' not in serialized_env_audit:

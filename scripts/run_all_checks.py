@@ -187,6 +187,7 @@ def main() -> int:
                 "scripts/check_walkforward_quality_gate.py",
                 "scripts/check_strategy_quality_sweep.py",
                 "scripts/check_server_live_readiness_runner.py",
+                "scripts/check_server_live_readiness_cancel.py",
                 "scripts/check_server_live_readiness_api.py",
                 "scripts/live_env_profile.py",
                 "scripts/check_live_env_profile.py",
@@ -306,6 +307,7 @@ def main() -> int:
     steps.append(run_step("order_sizing", [PYTHON, "scripts/check_order_sizing.py"], timeout=60))
     steps.append(run_step("strategy_quality_sweep", [PYTHON, "scripts/check_strategy_quality_sweep.py"], timeout=45))
     steps.append(run_step("server_live_readiness_runner", [PYTHON, "scripts/check_server_live_readiness_runner.py"], timeout=45))
+    steps.append(run_step("server_live_readiness_cancel", [PYTHON, "scripts/check_server_live_readiness_cancel.py"], timeout=45))
     steps.append(run_step("ai_operator_schema", [PYTHON, "scripts/check_ai_operator_schema.py"], timeout=30))
     steps.append(run_step("audit_chain", [PYTHON, "scripts/check_audit_chain.py"], timeout=60))
     steps.append(run_step("backup_state", [PYTHON, "scripts/check_backup_state.py"], timeout=60))

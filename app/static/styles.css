@@ -2660,7 +2660,7 @@ th {
   }
 
   body[data-active-view="overview"] .overview-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   body[data-active-view="overview"] .account-grid {
@@ -2752,7 +2752,7 @@ th {
   }
 
   body[data-active-view="overview"] .overview-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   body[data-active-view="overview"] .action-board {
@@ -3875,5 +3875,126 @@ th {
   .desk-card-head b {
     max-width: 100%;
     white-space: normal;
+  }
+}
+
+/* Final compact overview correction. The overview must behave like a dense
+   workbench even on narrow desktop windows, instead of squeezing cards into a
+   zero-width grid column. */
+@media (min-width: 860px) {
+  body[data-active-view="overview"] .view-stage {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-rows: auto;
+    align-content: start;
+    overflow: auto;
+  }
+
+  body[data-active-view="overview"] .view-context,
+  body[data-active-view="overview"] .action-board,
+  body[data-active-view="overview"] .overview-grid,
+  body[data-active-view="overview"] .account-grid,
+  body[data-active-view="overview"] .system-grid {
+    grid-column: 1 / -1 !important;
+    width: auto;
+    min-width: 0;
+  }
+
+  body[data-active-view="overview"] .action-board {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.86fr) minmax(0, 0.82fr) !important;
+    align-items: stretch;
+  }
+
+  body[data-active-view="overview"] .desk-card {
+    min-height: 104px;
+    padding: 10px;
+    gap: 7px;
+  }
+
+  body[data-active-view="overview"] .desk-primary strong {
+    font-size: 18px;
+    line-height: 1.18;
+  }
+
+  body[data-active-view="overview"] .desk-primary p,
+  body[data-active-view="overview"] .overview-card small,
+  body[data-active-view="overview"] .system-card small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  body[data-active-view="overview"] .desk-mini-grid {
+    gap: 5px;
+  }
+
+  body[data-active-view="overview"] .desk-mini-grid span {
+    padding: 6px 7px;
+  }
+
+  body[data-active-view="overview"] .desk-blockers ul {
+    max-height: 86px;
+    overflow: auto;
+    padding-right: 2px;
+  }
+
+  body[data-active-view="overview"] .desk-blockers li {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  body[data-active-view="overview"] .desk-action-grid {
+    gap: 6px;
+  }
+
+  body[data-active-view="overview"] .desk-action-grid button {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  body[data-active-view="overview"] .overview-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  body[data-active-view="overview"] .account-grid,
+  body[data-active-view="overview"] .system-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  body[data-active-view="overview"] .overview-card,
+  body[data-active-view="overview"] .metric,
+  body[data-active-view="overview"] .system-card {
+    min-height: 66px;
+    padding: 9px 10px;
+  }
+
+  body[data-active-view="overview"] .overview-card strong,
+  body[data-active-view="overview"] .metric strong,
+  body[data-active-view="overview"] .system-card strong {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 860px) and (max-width: 1039px) {
+  body[data-active-view="overview"] .action-board {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.58fr) !important;
+  }
+
+  body[data-active-view="overview"] .desk-primary {
+    grid-row: 1 / span 2;
+  }
+
+  body[data-active-view="overview"] .desk-card {
+    min-height: 0;
+  }
+
+  body[data-active-view="overview"] .overview-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  body[data-active-view="overview"] .account-grid,
+  body[data-active-view="overview"] .system-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
