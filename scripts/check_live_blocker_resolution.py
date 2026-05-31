@@ -52,6 +52,7 @@ def main() -> int:
             "blocking_gates",
             "next_action",
             "steps",
+            "latent_live_checks",
             "readiness",
             "testnet_drill",
             "final_live_ready_prearm",
@@ -72,9 +73,27 @@ def main() -> int:
         for step in steps:
             if not isinstance(step, dict):
                 return fail("resolution step is not an object", step)
-            missing_step = sorted({"id", "label", "status", "detail", "commands", "proof", "safety"} - set(step))
+            missing_step = sorted({"id", "label", "status", "detail", "phase", "commands", "proof", "safety"} - set(step))
             if missing_step:
                 return fail("resolution step missing required keys", {"missing": missing_step, "step": step})
+            if step.get("phase") != "current_blocker":
+                return fail("current blocker step did not carry current_blocker phase", step)
+        latent_checks = resolution.get("latent_live_checks") or []
+        if not isinstance(latent_checks, list):
+            return fail("latent_live_checks is not a list", resolution)
+        for step in latent_checks:
+            if not isinstance(step, dict):
+                return fail("latent live check is not an object", step)
+            missing_step = sorted({"id", "label", "status", "detail", "phase", "commands", "proof", "safety"} - set(step))
+            if missing_step:
+                return fail("latent live check missing required keys", {"missing": missing_step, "step": step})
+            if step.get("phase") != "post_live_enable_check":
+                return fail("latent live check did not carry post_live_enable_check phase", step)
+            if step.get("id") in (resolution.get("blocking_gates") or []):
+                return fail("latent live check duplicated a current blocking gate", step)
+        latent_ids = {str(step.get("id") or "") for step in latent_checks}
+        if "live_attestation" not in (resolution.get("blocking_gates") or []) and "live_attestation" not in latent_ids:
+            return fail("resolution should surface live attestation as a post-live-enable check when it is not currently blocking", resolution)
         serialized = json.dumps(resolution, ensure_ascii=False)
         if "live_flags" in serialized and "LIVE_TRADING_CONFIRMATION=I_UNDERSTAND_LIVE_RISK" not in serialized:
             return fail("live_flags blocker did not include live confirmation guidance", resolution)
@@ -102,6 +121,7 @@ def main() -> int:
                 "symbol": resolution.get("symbol"),
                 "blocking_gates": resolution.get("blocking_gates"),
                 "step_count": len(steps),
+                "latent_live_check_count": len(latent_checks),
             },
             ensure_ascii=False,
             indent=2,

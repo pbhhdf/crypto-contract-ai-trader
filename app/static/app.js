@@ -1584,6 +1584,7 @@ function renderLiveBlockerResolution(resolution) {
     ready_for_live_order: "pass",
   };
   const steps = resolution.steps || [];
+  const latentChecks = resolution.latent_live_checks || [];
   const status = resolution.status || "blocked";
   els.liveBlockerStatus.textContent = statusMap[status] || status;
   els.liveBlockerSummary.textContent =
@@ -1608,6 +1609,24 @@ function renderLiveBlockerResolution(resolution) {
         </article>
       `;
     }).join("")}
+    ${latentChecks.length ? `
+      <article>
+        <strong>启用 live 后会立刻复核<span class="badge warn">${fmt(latentChecks.length)} 项</span></strong>
+        <p>这些不是当前本地阻塞项，但切到 live_guarded 后会变成实盘前置证据，建议在服务器上提前准备。</p>
+      </article>
+      ${latentChecks.map((step) => {
+        const commands = (step.commands || []).slice(0, 3).map((item) => `<li><code>${escapeHtml(item)}</code></li>`).join("");
+        const proof = (step.proof || []).slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+        return `
+          <article>
+            <strong>${escapeHtml(step.label || step.id || "预检项")}<span class="badge warn">${escapeHtml(step.status || "pending")}</span></strong>
+            <p>${escapeHtml(livePilotText(step.detail || "-"))}</p>
+            ${commands ? `<ul>${commands}</ul>` : ""}
+            ${proof ? `<p>验收证据</p><ul>${proof}</ul>` : ""}
+          </article>
+        `;
+      }).join("")}
+    ` : ""}
     ${steps.length ? "" : `
       <article>
         <strong>没有非武装阻塞</strong>

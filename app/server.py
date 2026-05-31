@@ -12463,14 +12463,16 @@ def live_blocker_resolution_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
     blocking_items = gate.get("blocking_gates") or []
     blocking_ids = [str(item.get("id") or "") for item in blocking_items]
     blocking_by_id = {str(item.get("id") or ""): item for item in blocking_items}
+    all_gate_by_id = {str(item.get("id") or ""): item for item in gate.get("gates", [])}
 
     def template(gate_id: str) -> dict[str, Any]:
-        item = blocking_by_id.get(gate_id, {})
+        item = all_gate_by_id.get(gate_id) or blocking_by_id.get(gate_id, {})
         base = {
             "id": gate_id,
             "label": item.get("label") or gate_id,
             "status": item.get("status") or "pending",
             "detail": item.get("detail") or "",
+            "phase": "current_blocker" if gate_id in blocking_ids else "post_live_enable_check",
             "env_vars": [],
             "commands": [],
             "proof": [],
@@ -12585,6 +12587,51 @@ def live_blocker_resolution_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
                     "proof": ["外部告警测试成功，且 readiness 不再只依赖浏览器页面。"],
                 }
             )
+        elif gate_id == "exchange_position_mode":
+            base.update(
+                {
+                    "commands": [
+                        "python3 scripts/check_binance_position_mode.py",
+                        "python3 scripts/check_exchange_recovery.py",
+                    ],
+                    "proof": ["Binance 持仓模式已验证为 One-way，订单使用 BOTH 单向持仓语义。"],
+                }
+            )
+        elif gate_id == "binance_time_drift":
+            base.update(
+                {
+                    "commands": ["python3 scripts/check_binance_time_drift.py"],
+                    "proof": ["本机时间与 Binance serverTime 漂移低于阈值，签名 timestamp 不会超窗。"],
+                }
+            )
+        elif gate_id == "exchange_open_orders":
+            base.update(
+                {
+                    "commands": [
+                        "python3 scripts/check_exchange_open_order_gate.py",
+                        "python3 scripts/check_exchange_recovery.py",
+                    ],
+                    "proof": ["live_guarded 账户 openOrders 快照存在，且遗留挂单数量为 0。"],
+                }
+            )
+        elif gate_id == "exchange_open_positions":
+            base.update(
+                {
+                    "commands": [
+                        "python3 scripts/check_exchange_position_gate.py",
+                        "python3 scripts/check_exchange_recovery.py",
+                    ],
+                    "proof": ["live_guarded 账户 account 快照存在，且遗留持仓数量为 0。"],
+                }
+            )
+        elif gate_id == "live_pilot_capital":
+            base.update(
+                {
+                    "env_vars": ["LIVE_PILOT_MAX_WALLET_USDT=<small-pilot-capital-limit>"],
+                    "commands": ["python3 scripts/check_exchange_recovery.py", "python3 scripts/check_live_pilot.py"],
+                    "proof": ["live 钱包余额快照存在，且未超过首轮小额试运行上限。"],
+                }
+            )
         elif gate_id == "private_user_stream":
             base.update(
                 {
@@ -12637,6 +12684,35 @@ def live_blocker_resolution_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
             )
         return base
 
+    latent_gate_order = [
+        "live_attestation",
+        "binance_time_drift",
+        "exchange_position_mode",
+        "exchange_open_orders",
+        "exchange_open_positions",
+        "live_pilot_capital",
+        "alert_delivery",
+        "private_user_stream",
+        "live_arming",
+    ]
+
+    def is_latent_gate_unverified(gate_id: str) -> bool:
+        item = all_gate_by_id.get(gate_id)
+        if not item or gate_id in blocking_ids:
+            return False
+        if item.get("status") != "pass":
+            return True
+        evidence = item.get("evidence") or {}
+        if gate_id == "binance_time_drift":
+            return bool((evidence.get("time_drift") or {}).get("skipped"))
+        if gate_id in {"exchange_open_orders", "exchange_open_positions", "live_pilot_capital"}:
+            return not bool(evidence.get("required"))
+        if gate_id == "private_user_stream":
+            return not bool(evidence.get("required"))
+        return False
+
+    latent_live_checks = [template(gate_id) for gate_id in latent_gate_order if is_latent_gate_unverified(gate_id)]
+
     ordered_ids = [
         "deployment_profile",
         "server_auth",
@@ -12676,6 +12752,7 @@ def live_blocker_resolution_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
         "blocking_gates": blocking_ids,
         "next_action": next_action,
         "steps": steps,
+        "latent_live_checks": latent_live_checks,
         "readiness": {
             "overall": readiness.get("overall"),
             "server_deployment_profile_ready": APP_ENV == "server" and AUTH_ENABLED and TRADER_BIND_IP not in {"0.0.0.0", "::", ""},
