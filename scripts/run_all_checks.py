@@ -337,6 +337,51 @@ def main() -> int:
     ACTIVE_REPORT_WRITER = write_active_report
     write_active_report("starting", "running")
 
+    def finish(readiness: Any = None) -> int:
+        global ACTIVE_REPORT_WRITER
+        ok = all(step["ok"] for step in steps) and (readiness or {}).get("overall") in {"pass", "warn"}
+        report = {
+            "ok": ok,
+            "status": "completed",
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "started_at": started_at,
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "project_root": str(ROOT_DIR),
+            "base_url": BASE_URL,
+            "current_step": {"name": "completed", "status": "completed"},
+            "completed_step_count": len(steps),
+            "failed_steps": [step["name"] for step in steps if not step["ok"]],
+            "final_report_path": str(report_path),
+            "steps": steps,
+            "readiness": readiness,
+        }
+        write_json_atomic(report_path, report)
+        completed_active_report = build_readiness_report(
+            status="completed",
+            started_at=started_at,
+            steps=list(steps),
+            readiness=readiness,
+            ok=ok,
+            current_step={
+                "name": "completed",
+                "status": "completed",
+                "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            },
+            final_report_path=report_path,
+        )
+        write_json_atomic(active_report_path, completed_active_report)
+        write_json_atomic(partial_report_path, completed_active_report)
+        ACTIVE_REPORT_WRITER = None
+
+        summary = {
+            "ok": ok,
+            "report_path": str(report_path),
+            "failed_steps": [step["name"] for step in steps if not step["ok"]],
+            "readiness": (readiness or {}).get("overall"),
+        }
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0 if ok else 1
+
     steps.append(
         run_step(
             "compile",
@@ -357,6 +402,8 @@ def main() -> int:
                 "scripts/check_server_live_readiness_api.py",
                 "scripts/check_local_readiness_api.py",
                 "scripts/check_local_readiness_stale.py",
+                "scripts/check_server_build_api.py",
+                "scripts/check_run_all_checks_build_gate.py",
                 "scripts/check_check_runner_timeout.py",
                 "scripts/check_go_live_gate_local_readiness.py",
                 "scripts/live_env_profile.py",
@@ -481,6 +528,7 @@ def main() -> int:
     steps.append(run_step("server_live_readiness_cancel", [PYTHON, "scripts/check_server_live_readiness_cancel.py"], timeout=45))
     steps.append(run_step("local_readiness_atomic_write", [PYTHON, "scripts/check_local_readiness_atomic_write.py"], timeout=30))
     steps.append(run_step("local_readiness_stale", [PYTHON, "scripts/check_local_readiness_stale.py"], timeout=30))
+    steps.append(run_step("run_all_checks_build_gate", [PYTHON, "scripts/check_run_all_checks_build_gate.py"], timeout=30))
     steps.append(run_step("check_runner_timeout", [PYTHON, "scripts/check_check_runner_timeout.py"], timeout=20))
     steps.append(run_step("go_live_gate_local_readiness", [PYTHON, "scripts/check_go_live_gate_local_readiness.py"], timeout=30))
     steps.append(run_step("ai_operator_schema", [PYTHON, "scripts/check_ai_operator_schema.py"], timeout=30))
@@ -493,6 +541,16 @@ def main() -> int:
 
     server_available = health_ok()
     if server_available:
+        steps.append(run_server_step("server_build_api", [PYTHON, "scripts/check_server_build_api.py"], timeout=30))
+        if not steps[-1].get("ok"):
+            return finish(
+                {
+                    "overall": "fail",
+                    "error": "Running server build does not match the workspace; restart the service before server-side checks.",
+                    "failed_step": "server_build_api",
+                    "base_url": BASE_URL,
+                }
+            )
         quiet = quiesce_background_work()
         steps.append(
             {
@@ -505,7 +563,6 @@ def main() -> int:
                 "stderr": "",
             }
         )
-        steps.append(run_server_step("server_build_api", [PYTHON, "scripts/check_server_build_api.py"], timeout=30))
         steps.append(run_server_step("paper_workflow", [PYTHON, "scripts/check_public_data.py"], timeout=120))
         steps.append(run_server_step("risk_controls", [PYTHON, "scripts/check_risk_controls.py"], timeout=150))
         steps.append(run_server_step("panic_stop", [PYTHON, "scripts/check_panic_stop.py"], timeout=120))
@@ -610,44 +667,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 - report should capture any readiness fetch failure.
             readiness = {"overall": "fail", "error": f"{exc.__class__.__name__}: {exc}"}
 
-    ok = all(step["ok"] for step in steps) and (readiness or {}).get("overall") in {"pass", "warn"}
-    report = {
-        "ok": ok,
-        "status": "completed",
-        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "started_at": started_at,
-        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "project_root": str(ROOT_DIR),
-        "base_url": BASE_URL,
-        "current_step": {"name": "completed", "status": "completed"},
-        "completed_step_count": len(steps),
-        "failed_steps": [step["name"] for step in steps if not step["ok"]],
-        "final_report_path": str(report_path),
-        "steps": steps,
-        "readiness": readiness,
-    }
-    write_json_atomic(report_path, report)
-    completed_active_report = build_readiness_report(
-        status="completed",
-        started_at=started_at,
-        steps=list(steps),
-        readiness=readiness,
-        ok=ok,
-        current_step={"name": "completed", "status": "completed", "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
-        final_report_path=report_path,
-    )
-    write_json_atomic(active_report_path, completed_active_report)
-    write_json_atomic(partial_report_path, completed_active_report)
-    ACTIVE_REPORT_WRITER = None
-
-    summary = {
-        "ok": ok,
-        "report_path": str(report_path),
-        "failed_steps": [step["name"] for step in steps if not step["ok"]],
-        "readiness": (readiness or {}).get("overall"),
-    }
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
-    return 0 if ok else 1
+    return finish(readiness)
 
 
 if __name__ == "__main__":
