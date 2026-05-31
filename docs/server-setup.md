@@ -23,7 +23,10 @@ Two supported private access modes:
 - Direct tailnet bind: set `TRADER_BIND_IP` to the server's Tailscale IPv4.
 - Tailscale Serve / SSH tunnel: keep `TRADER_BIND_IP=127.0.0.1`.
 
-Never use `TRADER_BIND_IP=0.0.0.0` for this MVP server profile.
+Never use `TRADER_BIND_IP=0.0.0.0`, `TRADER_BIND_IP=::`, or a public IP for
+this MVP server profile. Runtime gates and `scripts/preflight.py` reject public
+binds; only loopback, private-network, link-local, or Tailscale `100.64.0.0/10`
+addresses are accepted.
 
 ## Host Preparation
 

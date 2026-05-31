@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import asyncio
 import importlib.util
+import ipaddress
 import json
 import hashlib
 import hmac
@@ -184,6 +185,7 @@ AUTH_FAILURE_LIMIT = env_int("AUTH_FAILURE_LIMIT", 8, 1, 100)
 AUTH_FAILURE_WINDOW_SECONDS = env_int("AUTH_FAILURE_WINDOW_SECONDS", 300, 30, 86_400)
 AUTH_LOCKOUT_SECONDS = env_int("AUTH_LOCKOUT_SECONDS", 900, 30, 86_400)
 TRADER_BIND_IP = os.getenv("TRADER_BIND_IP", "127.0.0.1").strip()
+TAILSCALE_CGNAT = ipaddress.ip_network("100.64.0.0/10")
 AI_OPERATOR_ENABLED = env_bool("AI_OPERATOR_ENABLED", True)
 AI_OPERATOR_PROVIDER = os.getenv("AI_OPERATOR_PROVIDER", AI_PROVIDER).lower().strip()
 AI_OPERATOR_MODEL = os.getenv("AI_OPERATOR_MODEL", AI_MODEL).strip()
@@ -229,6 +231,69 @@ AI_OPERATOR_SENSITIVE_KEY_RE = re.compile(
 AI_OPERATOR_ENV_ASSIGNMENT_RE = re.compile(
     r"(?m)^(\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*)(.*)$"
 )
+
+
+def private_bind_profile(value: str) -> dict[str, Any]:
+    text = str(value or "").strip()
+    if not text:
+        return {
+            "ok": False,
+            "status": "fail",
+            "category": "missing",
+            "detail": "TRADER_BIND_IP 未设置；服务器必须绑定 127.0.0.1、私网地址或 Tailscale CGNAT 地址。",
+        }
+    if text in {"0.0.0.0", "::"}:
+        return {
+            "ok": False,
+            "status": "fail",
+            "category": "wildcard",
+            "detail": "TRADER_BIND_IP 不能是 0.0.0.0/::；服务器不能把交易控制台直接绑定到所有网卡。",
+        }
+    try:
+        ip = ipaddress.ip_address(text)
+    except ValueError:
+        return {
+            "ok": False,
+            "status": "fail",
+            "category": "invalid_ip",
+            "detail": "TRADER_BIND_IP 必须是明确 IP；首阶段只允许 127.0.0.1、私网 IP 或 Tailscale 100.64.0.0/10。",
+        }
+    if ip.version == 4 and ip in TAILSCALE_CGNAT:
+        return {
+            "ok": True,
+            "status": "pass",
+            "category": "tailscale_cgnat",
+            "detail": "TRADER_BIND_IP 是 Tailscale CGNAT 地址，符合私有网络访问要求。",
+        }
+    if ip.is_loopback:
+        return {
+            "ok": True,
+            "status": "pass",
+            "category": "loopback",
+            "detail": "TRADER_BIND_IP 是 loopback 地址，适合 Tailscale Serve、SSH tunnel 或本机反代。",
+        }
+    if ip.is_link_local:
+        return {
+            "ok": True,
+            "status": "pass",
+            "category": "link_local",
+            "detail": "TRADER_BIND_IP 是 link-local 地址；仍需确认服务器网络入口不可公网访问。",
+        }
+    if ip.is_private:
+        return {
+            "ok": True,
+            "status": "pass",
+            "category": "private",
+            "detail": "TRADER_BIND_IP 是私网地址；仍需确认防火墙只允许可信内网或 Tailscale 访问。",
+        }
+    return {
+        "ok": False,
+        "status": "fail",
+        "category": "public",
+        "detail": "TRADER_BIND_IP 看起来是公网地址；首阶段不允许把交易控制台暴露公网。",
+    }
+
+
 AI_OPERATOR_JSON_SECRET_RE = re.compile(
     r'("([^"]*(?:secret|password|token|api[_-]?key|private[_-]?key|webhook[_-]?url|chat[_-]?id)[^"]*)"\s*:\s*)"([^"]*)"',
     re.IGNORECASE,
@@ -6391,10 +6456,10 @@ def go_live_gate_status() -> dict[str, Any]:
         },
     )
 
-    bind_is_public = TRADER_BIND_IP in {"0.0.0.0", "::", ""}
+    bind_profile = private_bind_profile(TRADER_BIND_IP)
     deployment_profile_ok = APP_ENV == "server"
     server_auth_ok = APP_ENV != "server" or AUTH_ENABLED
-    private_network_ok = APP_ENV != "server" or not bind_is_public
+    private_network_ok = APP_ENV != "server" or bool(bind_profile["ok"])
     add_gate(
         "deployment_profile",
         "服务器部署档案",
@@ -6417,8 +6482,12 @@ def go_live_gate_status() -> dict[str, Any]:
         "private_network",
         "私有网络访问",
         "pass" if private_network_ok else "fail",
-        "交易控制台未直接绑定公网地址。" if private_network_ok else "服务器上不能把 8787 直接绑定到 0.0.0.0 公网。",
-        {"app_env": APP_ENV, "trader_bind_ip": TRADER_BIND_IP},
+        (
+            bind_profile["detail"]
+            if APP_ENV == "server"
+            else "本地模式不要求私有入口；服务器实盘仍会强制检查 TRADER_BIND_IP。"
+        ),
+        {"app_env": APP_ENV, "trader_bind_ip": TRADER_BIND_IP, "bind_profile": bind_profile},
     )
     attestation = live_attestation_status()
     attestation_required = live_requested or live_mode_enabled
@@ -8816,13 +8885,13 @@ def deployment_readiness() -> dict[str, Any]:
         "pass" if (APP_ENV != "server" or AUTH_ENABLED) else "fail",
         "已配置基础认证。" if AUTH_ENABLED else "本地模式可不启用认证；服务器模式必须配置基础认证。",
     )
-    bind_is_public = TRADER_BIND_IP in {"0.0.0.0", "::", ""}
+    bind_profile = private_bind_profile(TRADER_BIND_IP)
     add(
         "Private network access",
-        "pass" if APP_ENV != "server" or not bind_is_public else "fail",
+        "pass" if APP_ENV != "server" or bind_profile["ok"] else "fail",
         (
             f"Docker 主机绑定地址={TRADER_BIND_IP or '未设置'}；"
-            "服务器阶段应绑定 127.0.0.1/Tailscale IP，并通过 Tailscale 私有网络访问。"
+            f"{bind_profile['detail']}"
         ),
     )
     testnet_key_ready = bool(BINANCE_API_KEY and BINANCE_API_SECRET)
@@ -12455,6 +12524,7 @@ def live_blocker_resolution_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
     symbol = (symbol or "BTCUSDT").upper().strip()
     readiness = deployment_readiness()
     gate = go_live_gate_status()
+    bind_profile = private_bind_profile(TRADER_BIND_IP)
     final_prearm = final_live_readiness(require_armed=False)
     final_armed = final_live_readiness(require_armed=True)
     env_profile = live_env_profile_status("live_guarded")
@@ -12755,7 +12825,8 @@ def live_blocker_resolution_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
         "latent_live_checks": latent_live_checks,
         "readiness": {
             "overall": readiness.get("overall"),
-            "server_deployment_profile_ready": APP_ENV == "server" and AUTH_ENABLED and TRADER_BIND_IP not in {"0.0.0.0", "::", ""},
+            "server_deployment_profile_ready": APP_ENV == "server" and AUTH_ENABLED and bool(bind_profile["ok"]),
+            "trader_bind_profile": bind_profile,
         },
         "testnet_drill": {
             "real_completed_cycles": drill.get("real_completed_cycles"),

@@ -58,6 +58,29 @@ validate_server_env() {
   [[ "${app_password}" != *"<"* ]] || fail "APP_BASIC_AUTH_PASSWORD still looks like a placeholder."
   [ -n "${bind_ip}" ] || fail "TRADER_BIND_IP is required. Use the Tailscale IPv4 or 127.0.0.1 behind a tunnel."
   [ "${bind_ip}" != "0.0.0.0" ] || fail "TRADER_BIND_IP=0.0.0.0 is not allowed for the Tailscale-first server profile."
+  [ "${bind_ip}" != "::" ] || fail "TRADER_BIND_IP=:: is not allowed for the Tailscale-first server profile."
+  local bind_check
+  bind_check="$(python3 - "${bind_ip}" <<'PY'
+from __future__ import annotations
+
+import ipaddress
+import sys
+
+value = (sys.argv[1] or "").strip()
+try:
+    ip = ipaddress.ip_address(value)
+except ValueError:
+    print("TRADER_BIND_IP must be an explicit IP address: 127.0.0.1, a private IP, or a Tailscale 100.64.0.0/10 address.")
+    raise SystemExit(1)
+tailscale_cgnat = ipaddress.ip_network("100.64.0.0/10")
+if ip.version == 4 and ip in tailscale_cgnat:
+    raise SystemExit(0)
+if ip.is_loopback or ip.is_link_local or ip.is_private:
+    raise SystemExit(0)
+print("TRADER_BIND_IP looks like a public address; do not expose the trading console directly to the internet.")
+raise SystemExit(1)
+PY
+  )" || fail "${bind_check}"
 
   if [ "${operator_shell}" = "true" ] && [ "${operator_backup}" != "true" ]; then
     fail "AI_OPERATOR_BACKUP_BEFORE_SHELL=true is required when AI_OPERATOR_ALLOW_SHELL=true."

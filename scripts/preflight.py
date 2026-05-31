@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import sys
@@ -12,6 +13,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+TAILSCALE_CGNAT = ipaddress.ip_network("100.64.0.0/10")
 
 
 def load_env_file(path: Path) -> None:
@@ -38,6 +40,53 @@ def has_placeholder(value: str) -> bool:
         "your-password",
         "choose-long-random-password",
     }
+
+
+def private_bind_profile(value: str) -> dict[str, Any]:
+    text = str(value or "").strip()
+    if has_placeholder(text):
+        return {
+            "ok": False,
+            "status": "fail",
+            "category": "placeholder",
+            "detail": "TRADER_BIND_IP still looks like a placeholder; use 127.0.0.1, a private IP, or a Tailscale 100.64.0.0/10 address.",
+        }
+    if text in {"0.0.0.0", "::"}:
+        return {
+            "ok": False,
+            "status": "fail",
+            "category": "wildcard",
+            "detail": "TRADER_BIND_IP must not be 0.0.0.0/:: in the Tailscale-first server profile.",
+        }
+    try:
+        ip = ipaddress.ip_address(text)
+    except ValueError:
+        return {
+            "ok": False,
+            "status": "fail",
+            "category": "invalid_ip",
+            "detail": "TRADER_BIND_IP must be an explicit IP address: 127.0.0.1, a private IP, or a Tailscale 100.64.0.0/10 address.",
+        }
+    if ip.version == 4 and ip in TAILSCALE_CGNAT:
+        category = "tailscale_cgnat"
+        detail = "TRADER_BIND_IP is a Tailscale CGNAT address."
+    elif ip.is_loopback:
+        category = "loopback"
+        detail = "TRADER_BIND_IP is loopback; use this behind Tailscale Serve, an SSH tunnel, or a local reverse proxy."
+    elif ip.is_link_local:
+        category = "link_local"
+        detail = "TRADER_BIND_IP is link-local; confirm the server is not reachable from the public internet."
+    elif ip.is_private:
+        category = "private"
+        detail = "TRADER_BIND_IP is private; confirm the firewall only allows trusted private network or Tailscale access."
+    else:
+        return {
+            "ok": False,
+            "status": "fail",
+            "category": "public",
+            "detail": "TRADER_BIND_IP looks like a public address; do not expose the trading console directly to the internet.",
+        }
+    return {"ok": True, "status": "pass", "category": category, "detail": detail}
 
 
 def check_binance_public() -> dict[str, Any]:
@@ -129,10 +178,9 @@ def main() -> int:
         errors.append("APP_BASIC_AUTH_PASSWORD still looks like a placeholder.")
 
     bind_ip = os.getenv("TRADER_BIND_IP", "127.0.0.1").strip()
-    if app_env == "server" and bind_ip in {"0.0.0.0", "::", ""}:
-        errors.append("TRADER_BIND_IP must not be 0.0.0.0/:: in the Tailscale-first server profile.")
-    if app_env == "server" and has_placeholder(bind_ip):
-        errors.append("TRADER_BIND_IP still looks like a placeholder.")
+    bind_profile = private_bind_profile(bind_ip)
+    if app_env == "server" and not bind_profile["ok"]:
+        errors.append(str(bind_profile["detail"]))
 
     try:
         max_order_notional = float(os.getenv("MAX_ORDER_NOTIONAL_USDT", "1000"))
@@ -302,9 +350,10 @@ def main() -> int:
         "python": sys.version.split()[0],
         "project_root": str(ROOT_DIR),
         "app_env": app_env,
-        "server_deployment_profile_ready": app_env == "server" and bool(auth_user and auth_password) and bind_ip not in {"0.0.0.0", "::", ""},
+        "server_deployment_profile_ready": app_env == "server" and bool(auth_user and auth_password) and bool(bind_profile["ok"]),
         "auth_configured": bool(auth_user and auth_password),
         "trader_bind_ip": bind_ip,
+        "trader_bind_profile": bind_profile,
         "max_order_notional_usdt": max_order_notional,
         "live_pilot_max_wallet_usdt": live_pilot_max_wallet,
         "go_live_min_walkforward_folds": walkforward_min_folds,

@@ -260,6 +260,7 @@ def main() -> int:
                 "scripts/check_audit_chain.py",
                 "scripts/check_backup_state.py",
                 "scripts/check_restore_state.py",
+                "scripts/check_private_bind_gate.py",
                 "scripts/check_preflight_live_profile.py",
                 "scripts/check_server_deploy_profile.py",
                 "scripts/check_auth_rate_limit.py",
@@ -278,6 +279,7 @@ def main() -> int:
         )
     )
     steps.append(run_step("preflight", [PYTHON, "scripts/preflight.py"], timeout=45))
+    steps.append(run_step("private_bind_gate", [PYTHON, "scripts/check_private_bind_gate.py"], timeout=30))
     steps.append(run_step("preflight_live_profile", [PYTHON, "scripts/check_preflight_live_profile.py"], timeout=60))
     steps.append(run_step("server_deploy_profile", [PYTHON, "scripts/check_server_deploy_profile.py"], timeout=30))
     steps.append(run_step("auth_rate_limit", [PYTHON, "scripts/check_auth_rate_limit.py"], timeout=30))

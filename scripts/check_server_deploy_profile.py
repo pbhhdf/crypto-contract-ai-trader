@@ -111,6 +111,8 @@ def main() -> int:
         "TRADER_BIND_IP=0.0.0.0 is not allowed",
         "APP_BASIC_AUTH_PASSWORD must be at least 16 characters",
         "AI_OPERATOR_BACKUP_BEFORE_SHELL=true is required",
+        "TRADER_BIND_IP=:: is not allowed",
+        "TRADER_BIND_IP looks like a public address",
         "docker compose -f",
         "bash deploy/verify-server.sh",
         "python3 scripts/server_go_live_audit.py",

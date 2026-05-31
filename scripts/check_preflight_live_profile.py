@@ -87,12 +87,55 @@ def main() -> int:
     if not any("APP_BASIC_AUTH_USER" in str(item) for item in auth_errors):
         return fail(f"server preflight did not require Basic Auth: {auth_errors}")
 
+    server_public_bind = run_preflight(
+        {
+            "APP_ENV": "server",
+            "APP_BASIC_AUTH_USER": "operator",
+            "APP_BASIC_AUTH_PASSWORD": "long-random-password-123",
+            "TRADER_BIND_IP": "8.8.8.8",
+            "EXCHANGE_MODE": "paper",
+        }
+    )
+    if server_public_bind.returncode == 0:
+        return fail("preflight allowed APP_ENV=server with a public TRADER_BIND_IP")
+    try:
+        bind_payload = parse_stdout(server_public_bind)
+    except AssertionError as exc:
+        return fail(str(exc))
+    bind_profile = bind_payload.get("trader_bind_profile") or {}
+    if bind_profile.get("category") != "public":
+        return fail(f"public bind did not produce the expected profile: {bind_profile}")
+    bind_errors = bind_payload.get("errors") or []
+    if not any("public address" in str(item) for item in bind_errors):
+        return fail(f"public bind preflight did not explain the public exposure risk: {bind_errors}")
+
+    server_tailscale_bind = run_preflight(
+        {
+            "APP_ENV": "server",
+            "APP_BASIC_AUTH_USER": "operator",
+            "APP_BASIC_AUTH_PASSWORD": "long-random-password-123",
+            "TRADER_BIND_IP": "100.64.0.10",
+            "EXCHANGE_MODE": "paper",
+        }
+    )
+    try:
+        tailscale_payload = parse_stdout(server_tailscale_bind)
+    except AssertionError as exc:
+        return fail(str(exc))
+    if tailscale_payload.get("server_deployment_profile_ready") is not True:
+        return fail("Tailscale bind should satisfy the server deployment profile readiness bit")
+    tailscale_profile = tailscale_payload.get("trader_bind_profile") or {}
+    if tailscale_profile.get("category") != "tailscale_cgnat":
+        return fail(f"Tailscale bind did not produce the expected profile: {tailscale_profile}")
+
     print(
         json.dumps(
             {
                 "ok": True,
                 "local_live_errors": local_errors,
                 "server_auth_errors": auth_errors,
+                "public_bind_errors": bind_errors,
+                "tailscale_bind_profile": tailscale_profile,
             },
             ensure_ascii=False,
             indent=2,
