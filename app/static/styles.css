@@ -4311,3 +4311,23 @@ th {
     max-width: 78vw;
   }
 }
+
+/* Service build visibility: keep the extra system card compact instead of
+   lengthening the overview page. */
+@media (min-width: 1200px) {
+  body[data-active-view="overview"] .system-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 860px) and (max-width: 1199px) {
+  body[data-active-view="overview"] .system-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+#server-build-fingerprint {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}

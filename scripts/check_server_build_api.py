@@ -53,6 +53,26 @@ def fail(message: str, payload: object | None = None) -> int:
     return 1
 
 
+def validate_build(build: object, *, expected_fingerprint: str, source: str) -> tuple[bool, str, dict[str, Any]]:
+    if not isinstance(build, dict):
+        return False, f"{source} payload is missing build metadata; restart the server with the current code", {}
+    actual_fingerprint = str(build.get("server_fingerprint") or "")
+    if actual_fingerprint != expected_fingerprint:
+        return (
+            False,
+            f"{source} build fingerprint does not match current app/server.py",
+            {
+                "expected_fingerprint": expected_fingerprint,
+                "actual_fingerprint": actual_fingerprint,
+                "server_pid": build.get("server_pid"),
+                "server_started_at": build.get("server_started_at"),
+            },
+        )
+    if not build.get("server_started_at") or not build.get("server_pid"):
+        return False, f"{source} build metadata is incomplete", build
+    return True, "", build
+
+
 def main() -> int:
     try:
         health = request_json("/api/health")
@@ -61,25 +81,25 @@ def main() -> int:
     except (URLError, TimeoutError, OSError) as exc:
         return fail(f"could not verify server build at {BASE_URL}: {exc}")
 
-    build = health.get("build")
-    if not isinstance(build, dict):
-        return fail("health payload is missing build metadata; restart the server with the current code", health)
-
     expected_fingerprint = hashlib.sha256((ROOT_DIR / "app" / "server.py").read_bytes()).hexdigest()
-    actual_fingerprint = str(build.get("server_fingerprint") or "")
-    if actual_fingerprint != expected_fingerprint:
-        return fail(
-            "running server does not match current app/server.py; restart the service before validation",
-            {
-                "base_url": BASE_URL,
-                "expected_fingerprint": expected_fingerprint,
-                "actual_fingerprint": actual_fingerprint,
-                "server_pid": build.get("server_pid"),
-                "server_started_at": build.get("server_started_at"),
-            },
-        )
-    if not build.get("server_started_at") or not build.get("server_pid"):
-        return fail("build metadata is incomplete", build)
+    ok, message, build = validate_build(health.get("build"), expected_fingerprint=expected_fingerprint, source="health")
+    if not ok:
+        return fail(message, {"base_url": BASE_URL, **build})
+
+    try:
+        state = request_json("/api/state")
+    except HTTPError as exc:
+        return fail(f"state HTTP {exc.code}: {exc.read().decode('utf-8', errors='replace')}")
+    except (URLError, TimeoutError, OSError) as exc:
+        return fail(f"could not verify state build metadata at {BASE_URL}: {exc}")
+    state_build = (state.get("system") or {}).get("build")
+    ok, message, state_build_payload = validate_build(
+        state_build,
+        expected_fingerprint=expected_fingerprint,
+        source="state",
+    )
+    if not ok:
+        return fail(message, {"base_url": BASE_URL, **state_build_payload})
 
     print(
         json.dumps(
@@ -88,7 +108,8 @@ def main() -> int:
                 "base_url": BASE_URL,
                 "server_pid": build.get("server_pid"),
                 "server_started_at": build.get("server_started_at"),
-                "server_fingerprint": actual_fingerprint[:16],
+                "server_fingerprint": expected_fingerprint[:16],
+                "state_build_visible": True,
             },
             ensure_ascii=False,
             indent=2,

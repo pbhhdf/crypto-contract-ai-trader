@@ -128,6 +128,8 @@ const els = {
   enabledModes: document.querySelector("#enabled-modes"),
   exchangeMode: document.querySelector("#exchange-mode"),
   testnetStatus: document.querySelector("#testnet-status"),
+  serverBuildFingerprint: document.querySelector("#server-build-fingerprint"),
+  serverBuildDetail: document.querySelector("#server-build-detail"),
   readinessOverall: document.querySelector("#readiness-overall"),
   readinessList: document.querySelector("#readiness-list"),
   auditChainStatus: document.querySelector("#audit-chain-status"),
@@ -906,6 +908,12 @@ function renderConfig(data) {
   els.marketSource.textContent = sourceText(config.market_data_source);
   els.enabledModes.textContent = `已启用：${(config.enabled_modes || []).map(modeText).join("、")}`;
   els.exchangeMode.textContent = modeText(exchange.mode || data.system?.mode);
+  const build = data.system?.build || {};
+  const fingerprint = String(build.server_fingerprint || "");
+  els.serverBuildFingerprint.textContent = fingerprint ? fingerprint.slice(0, 12) : "-";
+  els.serverBuildDetail.textContent = build.server_started_at
+    ? `PID ${fmt(build.server_pid)} / 启动 ${shortTime(build.server_started_at)}`
+    : "等待服务指纹";
   els.testnetStatus.textContent = exchange.testnet_enabled
     ? `测试网${exchange.testnet_key_ready ? "密钥已配置" : "未配置密钥"} / 测试网下单${exchange.testnet_places_real_orders ? "开" : "关"} / 保证金${exchange.target_margin_type || "-"}${exchange.sync_margin_type_before_order ? "同步开" : "同步关"} / 杠杆同步${exchange.sync_leverage_before_order ? "开" : "关"} / One-way${exchange.require_one_way_position_mode ? "必需" : "未要求"} / 实盘${exchange.live_places_real_orders ? "开" : "关"}`
     : `测试网未启用 / 保证金${exchange.target_margin_type || "-"}${exchange.sync_margin_type_before_order ? "同步开" : "同步关"} / 杠杆同步${exchange.sync_leverage_before_order ? "开" : "关"} / One-way${exchange.require_one_way_position_mode ? "必需" : "未要求"} / 实盘${exchange.live_places_real_orders ? "开" : "关"}`;
