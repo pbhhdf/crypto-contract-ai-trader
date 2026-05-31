@@ -227,6 +227,9 @@ const els = {
   liveBlockerStatus: document.querySelector("#live-blocker-status"),
   liveBlockerSummary: document.querySelector("#live-blocker-summary"),
   liveBlockerList: document.querySelector("#live-blocker-list"),
+  liveNextActionStatus: document.querySelector("#live-next-action-status"),
+  liveNextActionSummary: document.querySelector("#live-next-action-summary"),
+  liveNextActionList: document.querySelector("#live-next-action-list"),
   liveAttestationStatus: document.querySelector("#live-attestation-status"),
   attestWithdrawalDisabled: document.querySelector("#attest-withdrawal-disabled"),
   attestIpWhitelisted: document.querySelector("#attest-ip-whitelisted"),
@@ -297,6 +300,7 @@ let readinessLoading = false;
 let readinessLoadedAt = 0;
 let goLiveGateLoading = false;
 let goLiveGateLoadedAt = 0;
+let lastFullGoLiveGate = null;
 const activeViewStorageKey = "cryptoTrader.activeView";
 
 const viewMeta = {
@@ -1484,12 +1488,85 @@ function renderLiveAttestation(attestation) {
   `;
 }
 
+function liveQuickCommandForGate(id) {
+  const map = {
+    deployment_profile: "python3 scripts/live_env_profile.py --env-file .env --target mvp_server --strict",
+    live_flags: "python3 scripts/live_env_profile.py --env-file .env --target live_guarded --strict",
+    testnet_drill_cycles: "python3 scripts/run_testnet_drill_until_ready.py --mode binance_testnet_validate --target-cycles 24 --interval-seconds 60",
+    live_attestation: "/live-attest --confirm LIVE_ATTESTATION_CONFIRMED",
+    alert_delivery: "python3 scripts/check_alert_delivery.py",
+    private_user_stream: "python3 scripts/check_private_stream_mapping.py",
+    exchange_position_mode: "python3 scripts/check_binance_position_mode.py",
+    exchange_open_orders: "python3 scripts/check_exchange_open_order_gate.py",
+    exchange_open_positions: "python3 scripts/check_exchange_position_gate.py",
+    live_pilot_capital: "python3 scripts/check_live_pilot.py",
+    live_arming: "/live-arm --confirm ARM_LIVE_TRADING",
+  };
+  return map[id] || "python3 scripts/check_go_live_gate.py";
+}
+
+function renderLiveNextActionsFromGate(gate) {
+  if (!els.liveNextActionStatus) return;
+  if (!gate) {
+    els.liveNextActionStatus.textContent = "等待读取";
+    els.liveNextActionSummary.textContent = "自动汇总当前阻塞项，并给出最多三条可执行动作。";
+    els.liveNextActionList.innerHTML = "";
+    return;
+  }
+  const blockers = gate.blocking_gates || [];
+  const statusMap = {
+    ready: "已通过",
+    blocked: "仍有阻塞",
+    locked: "实盘锁定",
+  };
+  els.liveNextActionStatus.textContent = gate.ready_for_live_order
+    ? "可提交首单"
+    : statusMap[gate.status] || gate.status || "待处理";
+  els.liveNextActionSummary.textContent = gate.ready_for_live_order
+    ? "所有门禁已过；只允许短时、小额、单笔实盘首单流程。"
+    : blockers.length
+      ? `优先处理前 ${fmt(Math.min(3, blockers.length))} 个阻塞项；详细命令可展开解除路线。`
+      : "没有非武装阻塞；下一步检查短时授权和首单执行器。";
+  els.liveNextActionList.innerHTML = blockers.length
+    ? blockers.slice(0, 3).map((item, index) => `
+        <article>
+          <strong>${fmt(index + 1)}. ${escapeHtml(item.label || item.id || "阻塞项")}<span class="badge fail">阻塞</span></strong>
+          <p>${escapeHtml(livePilotText(item.detail || "-"))}</p>
+          <code>${escapeHtml(liveQuickCommandForGate(item.id))}</code>
+        </article>
+      `).join("")
+    : `
+      <article>
+        <strong>检查短时授权<span class="badge warn">下一步</span></strong>
+        <p>最终实盘检查通过后，使用短时武装窗口提交一笔受控首单。</p>
+        <code>/live-arm --confirm ARM_LIVE_TRADING</code>
+      </article>
+      <article>
+        <strong>首单执行器<span class="badge warn">复核</span></strong>
+        <p>提交前再次检查最终门禁、风险、OMS 和确认短语。</p>
+        <code>python3 scripts/check_live_pilot.py</code>
+      </article>
+    `;
+}
+
+function displayGoLiveGate(gate) {
+  if (!gate?.summary_only || !lastFullGoLiveGate) return gate;
+  return {
+    ...lastFullGoLiveGate,
+    ...gate,
+    summary_only: false,
+    gates: lastFullGoLiveGate.gates || [],
+    blocking_gates: lastFullGoLiveGate.blocking_gates || [],
+  };
+}
+
 function renderGoLiveGate(gate) {
   if (!gate) {
     els.liveGateStatus.textContent = "锁定中";
     els.liveGateSummary.textContent = "尚未读取准入状态";
     els.liveGateFacts.innerHTML = "";
     els.liveGateList.innerHTML = "";
+    renderLiveNextActionsFromGate(null);
     if (els.overviewLiveStatus) {
       els.overviewLiveStatus.textContent = "锁定中";
       els.overviewLiveDetail.textContent = "未读取门禁状态";
@@ -1504,6 +1581,7 @@ function renderGoLiveGate(gate) {
   };
   const blockers = gate.blocking_gates || [];
   const arming = gate.live_arming || {};
+  renderLiveNextActionsFromGate(gate);
   els.liveGateStatus.textContent = statusMap[gate.status] || gate.status || "-";
   els.liveGateSummary.textContent = gate.ready_for_live_order
     ? "所有实盘前置条件已通过，live_guarded 可以执行真实订单。"
@@ -1718,6 +1796,11 @@ function renderLiveBlockerResolution(resolution) {
     els.liveBlockerStatus.textContent = "未生成";
     els.liveBlockerSummary.textContent = "把当前实盘阻塞项翻译成服务器环境变量、命令和验收证据。";
     els.liveBlockerList.innerHTML = "";
+    if (els.liveNextActionStatus) {
+      els.liveNextActionStatus.textContent = "等待读取";
+      els.liveNextActionSummary.textContent = "自动汇总当前阻塞项，并给出最多三条可执行动作。";
+      els.liveNextActionList.innerHTML = "";
+    }
     return;
   }
   const statusMap = {
@@ -1739,6 +1822,32 @@ function renderLiveBlockerResolution(resolution) {
   els.liveBlockerSummary.textContent =
     livePilotText(resolution.next_action || "") ||
     `剩余 ${fmt((resolution.blocking_gates || []).length)} 个阻塞门禁。`;
+  if (els.liveNextActionStatus) {
+    const compactSteps = steps.length ? steps : latentChecks;
+    els.liveNextActionStatus.textContent = statusMap[status] || status;
+    els.liveNextActionSummary.textContent =
+      livePilotText(resolution.next_action || "") ||
+      `剩余 ${fmt((resolution.blocking_gates || []).length)} 个阻塞门禁。`;
+    els.liveNextActionList.innerHTML = compactSteps.length
+      ? compactSteps.slice(0, 3).map((step, index) => {
+          const command = (step.commands || [])[0] || "";
+          const envVars = (step.env_vars || []).slice(0, 3).join(" / ");
+          const proof = (step.proof || [])[0] || "";
+          return `
+            <article>
+              <strong>${fmt(index + 1)}. ${escapeHtml(step.label || step.id || "下一步")}<span class="badge ${step.phase === "current_blocker" ? "fail" : "warn"}">${step.phase === "current_blocker" ? "当前阻塞" : "启用后复核"}</span></strong>
+              <p>${escapeHtml(livePilotText(step.detail || proof || "-"))}</p>
+              ${command ? `<code>${escapeHtml(command)}</code>` : envVars ? `<code>${escapeHtml(envVars)}</code>` : ""}
+            </article>
+          `;
+        }).join("")
+      : `
+        <article>
+          <strong>没有非武装阻塞<span class="badge pass">可推进</span></strong>
+          <p>${escapeHtml(livePilotText(resolution.next_action || "继续执行短时武装和首单流程。"))}</p>
+        </article>
+      `;
+  }
   els.liveBlockerList.innerHTML = `
     <article>
       <strong>解除路线<span class="badge ${badgeMap[status] || "warn"}">${escapeHtml(statusMap[status] || status)}</span></strong>
@@ -3005,7 +3114,8 @@ async function ensureGoLiveGateLoaded() {
     const response = await fetch(goLiveGateUrl, { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || response.statusText);
-    renderGoLiveGate(data.go_live_gate);
+    lastFullGoLiveGate = data.go_live_gate || null;
+    renderGoLiveGate(displayGoLiveGate(data.go_live_gate));
     goLiveGateLoadedAt = Date.now();
   } catch (error) {
     if (els.liveGateStatus) {
@@ -3035,7 +3145,7 @@ async function refresh() {
     renderTestnetDrill(data.testnet_drill);
     renderServerLiveReadiness(data.server_live_readiness);
     renderLiveEnvProfile(data.live_env_profile);
-    renderGoLiveGate(data.go_live_gate);
+    renderGoLiveGate(displayGoLiveGate(data.go_live_gate));
     if (data.go_live_gate?.summary_only) {
       ensureGoLiveGateLoaded();
     }
@@ -3527,7 +3637,8 @@ els.checkLiveGate.addEventListener("click", async () => {
   els.checkLiveGate.disabled = true;
   try {
     const result = await postJson("/api/go-live-gate/check");
-    renderGoLiveGate(result.go_live_gate);
+    lastFullGoLiveGate = result.go_live_gate || null;
+    renderGoLiveGate(displayGoLiveGate(result.go_live_gate));
     await refresh();
   } catch (error) {
     alert(error.message);
@@ -3827,7 +3938,8 @@ els.armLiveGate.addEventListener("click", async () => {
       actor: "dashboard",
     });
     els.liveArmConfirmation.value = "";
-    renderGoLiveGate(result.go_live_gate);
+    lastFullGoLiveGate = result.go_live_gate || lastFullGoLiveGate;
+    renderGoLiveGate(displayGoLiveGate(result.go_live_gate));
     await refresh();
   } catch (error) {
     alert(error.message);
@@ -3842,7 +3954,8 @@ els.disarmLiveGate.addEventListener("click", async () => {
     const result = await postJson("/api/live-arming/disarm", {
       reason: "manual dashboard disarm",
     });
-    renderGoLiveGate(result.go_live_gate);
+    lastFullGoLiveGate = result.go_live_gate || lastFullGoLiveGate;
+    renderGoLiveGate(displayGoLiveGate(result.go_live_gate));
     await refresh();
   } catch (error) {
     alert(error.message);
@@ -3887,7 +4000,8 @@ els.saveLiveAttestation.addEventListener("click", async () => {
     els.liveAttestationConfirmation.value = "";
     liveAttestationDirty = false;
     renderLiveAttestation(result.live_attestation);
-    renderGoLiveGate(result.go_live_gate);
+    lastFullGoLiveGate = result.go_live_gate || lastFullGoLiveGate;
+    renderGoLiveGate(displayGoLiveGate(result.go_live_gate));
     await refresh();
   } catch (error) {
     alert(error.message);
@@ -3906,7 +4020,8 @@ els.clearLiveAttestation.addEventListener("click", async () => {
     els.liveAttestationConfirmation.value = "";
     els.liveAttestationNote.value = "";
     renderLiveAttestation(result.live_attestation);
-    renderGoLiveGate(result.go_live_gate);
+    lastFullGoLiveGate = result.go_live_gate || lastFullGoLiveGate;
+    renderGoLiveGate(displayGoLiveGate(result.go_live_gate));
     await refresh();
   } catch (error) {
     alert(error.message);
