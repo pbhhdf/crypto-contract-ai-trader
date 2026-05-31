@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import base64
+import signal
 import subprocess
 import sys
 import time
@@ -48,28 +49,100 @@ def utc_now_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+def emit_progress(name: str, status: str, **fields: Any) -> None:
+    payload = {"step": name, "status": status, **fields}
+    print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
+
+
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                cwd=ROOT_DIR,
+                text=True,
+                capture_output=True,
+                timeout=10,
+            )
+        else:
+            os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=5)
+    except Exception:
+        try:
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+        except Exception:
+            pass
+
+
 def run_step(name: str, args: list[str], timeout: int = 120) -> dict[str, Any]:
     started = time.time()
     env = os.environ.copy()
     if AUTH_USER and AUTH_PASSWORD:
         env.setdefault("TRADER_AUTH_USER", AUTH_USER)
         env.setdefault("TRADER_AUTH_PASSWORD", AUTH_PASSWORD)
-    completed = subprocess.run(
-        args,
-        cwd=ROOT_DIR,
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        env=env,
-    )
+    emit_progress(name, "start", timeout_seconds=timeout)
+    process: subprocess.Popen[str] | None = None
+    stdout = ""
+    stderr = ""
+    timed_out = False
+    launch_error = ""
+    try:
+        popen_kwargs = {"start_new_session": True} if os.name != "nt" else {}
+        process = subprocess.Popen(
+            args,
+            cwd=ROOT_DIR,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            **popen_kwargs,
+        )
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            terminate_process_tree(process)
+            try:
+                more_stdout, more_stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired as final_exc:
+                more_stdout = final_exc.stdout or ""
+                more_stderr = "\n".join(
+                    item
+                    for item in [
+                        str(final_exc.stderr or "").strip(),
+                        "Process did not exit cleanly after timeout termination.",
+                    ]
+                    if item
+                )
+            stdout = "".join([stdout, more_stdout or ""])
+            stderr = "".join([stderr, more_stderr or ""])
+    except Exception as exc:  # noqa: BLE001 - validation runner must report launch failures as step failures.
+        launch_error = f"{exc.__class__.__name__}: {exc}"
+    returncode = process.returncode if process is not None else 1
+    if timed_out:
+        stderr = "\n".join(item for item in [stderr.strip(), f"Timed out after {timeout}s"] if item)
+    if launch_error:
+        stderr = "\n".join(item for item in [stderr.strip(), launch_error] if item)
+    ok = returncode == 0 and not timed_out and not launch_error
+    duration = round(time.time() - started, 2)
+    emit_progress(name, "done", ok=ok, duration_seconds=duration, timed_out=timed_out)
     return {
         "name": name,
-        "ok": completed.returncode == 0,
-        "returncode": completed.returncode,
-        "duration_seconds": round(time.time() - started, 2),
+        "ok": ok,
+        "returncode": returncode,
+        "duration_seconds": duration,
         "command": args,
-        "stdout": completed.stdout.strip(),
-        "stderr": completed.stderr.strip(),
+        "stdout": stdout.strip(),
+        "stderr": stderr.strip(),
+        "timed_out": timed_out,
     }
 
 
@@ -189,6 +262,7 @@ def main() -> int:
                 "scripts/check_server_live_readiness_runner.py",
                 "scripts/check_server_live_readiness_cancel.py",
                 "scripts/check_server_live_readiness_api.py",
+                "scripts/check_check_runner_timeout.py",
                 "scripts/live_env_profile.py",
                 "scripts/check_live_env_profile.py",
                 "scripts/export_live_launch_plan.py",
@@ -308,6 +382,7 @@ def main() -> int:
     steps.append(run_step("strategy_quality_sweep", [PYTHON, "scripts/check_strategy_quality_sweep.py"], timeout=45))
     steps.append(run_step("server_live_readiness_runner", [PYTHON, "scripts/check_server_live_readiness_runner.py"], timeout=45))
     steps.append(run_step("server_live_readiness_cancel", [PYTHON, "scripts/check_server_live_readiness_cancel.py"], timeout=45))
+    steps.append(run_step("check_runner_timeout", [PYTHON, "scripts/check_check_runner_timeout.py"], timeout=20))
     steps.append(run_step("ai_operator_schema", [PYTHON, "scripts/check_ai_operator_schema.py"], timeout=30))
     steps.append(run_step("audit_chain", [PYTHON, "scripts/check_audit_chain.py"], timeout=60))
     steps.append(run_step("backup_state", [PYTHON, "scripts/check_backup_state.py"], timeout=60))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -18,6 +19,32 @@ PYTHON = sys.executable
 
 def utc_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                cwd=ROOT_DIR,
+                text=True,
+                capture_output=True,
+                timeout=10,
+            )
+        else:
+            os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=5)
+    except Exception:
+        try:
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+        except Exception:
+            pass
 
 
 def load_env_file(path: Path) -> None:
@@ -45,23 +72,61 @@ def run_step(name: str, command: list[str], timeout: int, dry_run: bool = False)
         }
     started = time.time()
     env = os.environ.copy()
-    completed = subprocess.run(
-        command,
-        cwd=ROOT_DIR,
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        env=env,
-    )
+    process: subprocess.Popen[str] | None = None
+    stdout = ""
+    stderr = ""
+    timed_out = False
+    launch_error = ""
+    try:
+        popen_kwargs = {"start_new_session": True} if os.name != "nt" else {}
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT_DIR,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            **popen_kwargs,
+        )
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            terminate_process_tree(process)
+            try:
+                more_stdout, more_stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired as final_exc:
+                more_stdout = final_exc.stdout or ""
+                more_stderr = "\n".join(
+                    item
+                    for item in [
+                        str(final_exc.stderr or "").strip(),
+                        "Process did not exit cleanly after timeout termination.",
+                    ]
+                    if item
+                )
+            stdout = "".join([stdout, more_stdout or ""])
+            stderr = "".join([stderr, more_stderr or ""])
+    except Exception as exc:  # noqa: BLE001 - readiness runner must report launch failures.
+        launch_error = f"{exc.__class__.__name__}: {exc}"
+    returncode = process.returncode if process is not None else 1
+    if timed_out:
+        stderr = "\n".join(item for item in [stderr.strip(), f"Timed out after {timeout}s"] if item)
+    if launch_error:
+        stderr = "\n".join(item for item in [stderr.strip(), launch_error] if item)
+    ok = returncode == 0 and not timed_out and not launch_error
     return {
         "name": name,
-        "ok": completed.returncode == 0,
+        "ok": ok,
         "dry_run": False,
-        "returncode": completed.returncode,
+        "returncode": returncode,
         "duration_seconds": round(time.time() - started, 2),
         "command": command,
-        "stdout": completed.stdout.strip(),
-        "stderr": completed.stderr.strip(),
+        "stdout": stdout.strip(),
+        "stderr": stderr.strip(),
+        "timed_out": timed_out,
     }
 
 
