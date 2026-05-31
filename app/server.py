@@ -1720,6 +1720,16 @@ def get_latest_run() -> dict[str, Any] | None:
         )
 
 
+def get_latest_run_by_mode(mode: str) -> dict[str, Any] | None:
+    with DB_LOCK, connect() as conn:
+        return dict_row(
+            conn.execute(
+                "SELECT * FROM runs WHERE mode = ? ORDER BY created_at DESC LIMIT 1",
+                (mode,),
+            ).fetchone()
+        )
+
+
 def get_events(run_id: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
     query = "SELECT * FROM events"
     params: list[Any] = []
@@ -12222,6 +12232,160 @@ def final_live_readiness(require_armed: bool = True, require_ai_operator: bool =
 
 
 LIVE_PILOT_CONFIRMATION = "LAUNCH_LIVE_PILOT"
+LIVE_PROTECTION_REQUIRED_KINDS = ("stop_loss", "take_profit")
+
+
+def compact_protection_chain_order(order: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": order.get("id"),
+        "symbol": order.get("symbol"),
+        "status": order.get("status"),
+        "venue_status": order.get("venue_status"),
+        "reconcile_status": order.get("reconcile_status"),
+        "protection_kind": order.get("protection_kind"),
+        "parent_order_id": order.get("parent_order_id"),
+        "client_order_id": order.get("client_order_id"),
+        "created_at": order.get("created_at"),
+        "updated_at": order.get("updated_at"),
+    }
+
+
+def live_pilot_protection_chain_status(symbol: str = "BTCUSDT", run_id: str = "") -> dict[str, Any]:
+    symbol = (symbol or "BTCUSDT").upper().strip()
+    run_id = str(run_id or "").strip()
+    orders = get_orders(limit=300)
+    live_orders = [
+        order
+        for order in orders
+        if (
+            str(order.get("id") or "").startswith("LIVE")
+            or str(order.get("status") or "").startswith("live_")
+        )
+        and (not symbol or str(order.get("symbol") or "").upper() == symbol)
+        and (not run_id or order.get("run_id") == run_id)
+    ]
+    parent_orders = [order for order in live_orders if not order.get("parent_order_id")]
+    orphan_children = [
+        order
+        for order in live_orders
+        if order.get("parent_order_id") and not get_order(str(order.get("parent_order_id") or ""))
+    ]
+    if not parent_orders:
+        orphan_count = len(orphan_children)
+        return {
+            "status": "fail" if orphan_count else "warn",
+            "ok": orphan_count == 0,
+            "symbol": symbol,
+            "run_id": run_id,
+            "parent_order_id": "",
+            "parent_status": "",
+            "child_count": 0,
+            "active_child_count": 0,
+            "missing_kinds": list(LIVE_PROTECTION_REQUIRED_KINDS),
+            "present_kinds": [],
+            "orphan_child_count": orphan_count,
+            "requires_manual_review": bool(orphan_children),
+            "detail": (
+                f"发现 {orphan_count} 个 live 保护子单没有本地父单，必须先人工核对交易所挂单。"
+                if orphan_count
+                else "尚未找到 live_guarded 入场父单；提交首单后必须复盘止损/止盈保护单。"
+            ),
+            "children": [],
+            "orphans": [compact_protection_chain_order(order) for order in orphan_children[:10]],
+        }
+
+    parent = parent_orders[0]
+    parent_id = str(parent.get("id") or "")
+    children = get_child_protection_orders(parent_id)
+    present_kinds = sorted(
+        {
+            str(child.get("protection_kind") or "")
+            for child in children
+            if child.get("protection_kind")
+        }
+    )
+    missing_kinds = [kind for kind in LIVE_PROTECTION_REQUIRED_KINDS if kind not in present_kinds]
+    active_statuses = {"live_protection_submitted", "pending_reconcile"}
+    terminal_statuses = {"live_protection_filled", "live_protection_canceled"}
+    active_children = [
+        child
+        for child in children
+        if str(child.get("status") or "") in active_statuses
+    ]
+    reconciled_children = [
+        child
+        for child in children
+        if str(child.get("reconcile_status") or "") in {"reconciled", "reviewed"}
+    ]
+    needs_reconcile_children = [
+        child
+        for child in children
+        if str(child.get("reconcile_status") or "") == "needs_reconcile"
+        or str(child.get("venue_status") or "").upper() in {"UNKNOWN", ""}
+    ]
+    child_statuses = {
+        str(child.get("protection_kind") or child.get("id") or "-"): str(child.get("status") or "-")
+        for child in children
+    }
+    parent_status = str(parent.get("status") or "")
+    parent_active = parent_status in {"live_submitted", "live_filled", "pending_reconcile"}
+    parent_protected_exit = parent_status == "live_protected_exit"
+    filled_protection = any(str(child.get("status") or "") == "live_protection_filled" for child in children)
+    all_children_terminal = bool(children) and all(str(child.get("status") or "") in terminal_statuses for child in children)
+
+    status = "pass"
+    requires_manual_review = False
+    if orphan_children:
+        status = "fail"
+        requires_manual_review = True
+        detail = f"发现 {len(orphan_children)} 个 live 保护子单没有本地父单，必须先人工核对交易所挂单。"
+    elif missing_kinds:
+        status = "fail"
+        requires_manual_review = True
+        detail = f"父单 {parent_id} 缺少保护单：{', '.join(missing_kinds)}。"
+    elif parent_active and not active_children:
+        status = "fail"
+        requires_manual_review = True
+        detail = f"父单 {parent_id} 仍可能暴露，但没有活跃止损/止盈保护单。"
+    elif parent_protected_exit and not filled_protection:
+        status = "warn"
+        detail = f"父单 {parent_id} 已标记保护退出，但未看到已成交的保护子单证据。"
+    elif needs_reconcile_children:
+        status = "warn"
+        detail = f"父单 {parent_id} 的保护单已创建，但 {len(needs_reconcile_children)} 个仍需交易所回报/对账。"
+    elif all_children_terminal:
+        status = "pass"
+        detail = f"父单 {parent_id} 的保护单链路已闭环，子单均为终态。"
+    elif reconciled_children or active_children:
+        status = "pass"
+        detail = f"父单 {parent_id} 已关联止损和止盈保护单。"
+    else:
+        status = "warn"
+        detail = f"父单 {parent_id} 已有关联保护单，但状态证据不足，建议立即复核交易所挂单。"
+
+    return {
+        "status": status,
+        "ok": status != "fail",
+        "symbol": symbol,
+        "run_id": run_id or str(parent.get("run_id") or ""),
+        "parent_order_id": parent_id,
+        "parent_status": parent_status,
+        "parent_venue_status": parent.get("venue_status"),
+        "parent_reconcile_status": parent.get("reconcile_status"),
+        "child_count": len(children),
+        "active_child_count": len(active_children),
+        "terminal_child_count": len([child for child in children if str(child.get("status") or "") in terminal_statuses]),
+        "needs_reconcile_child_count": len(needs_reconcile_children),
+        "missing_kinds": missing_kinds,
+        "present_kinds": present_kinds,
+        "child_statuses": child_statuses,
+        "orphan_child_count": len(orphan_children),
+        "requires_manual_review": requires_manual_review,
+        "detail": detail,
+        "parent": compact_protection_chain_order(parent),
+        "children": [compact_protection_chain_order(child) for child in children[:10]],
+        "orphans": [compact_protection_chain_order(order) for order in orphan_children[:10]],
+    }
 
 
 def live_pilot_status(symbol: str = "BTCUSDT") -> dict[str, Any]:
@@ -12318,7 +12482,7 @@ def execute_live_pilot_order(settings: dict[str, Any]) -> dict[str, Any]:
 
 def live_pilot_postflight_status(symbol: str = "BTCUSDT", run_id: str = "") -> dict[str, Any]:
     symbol = (symbol or "BTCUSDT").upper().strip()
-    selected_run = get_run(run_id) if run_id else get_latest_run()
+    selected_run = get_run(run_id) if run_id else get_latest_run_by_mode("live_guarded")
     run_orders = [
         order
         for order in get_orders(limit=200)
@@ -12339,6 +12503,10 @@ def live_pilot_postflight_status(symbol: str = "BTCUSDT", run_id: str = "") -> d
     final_prearm = final_live_readiness(require_armed=False)
     selected_mode = str((selected_run or {}).get("mode") or "")
     selected_status = str((selected_run or {}).get("status") or "")
+    protection_chain = live_pilot_protection_chain_status(
+        symbol,
+        str((selected_run or {}).get("id") or run_id or ""),
+    )
 
     checks = [
         {
@@ -12362,6 +12530,12 @@ def live_pilot_postflight_status(symbol: str = "BTCUSDT", run_id: str = "") -> d
             "label": "实盘订单证据",
             "status": "pass" if live_orders else "warn",
             "detail": f"该运行关联 live_guarded 订单 {len(live_orders)} 个。",
+        },
+        {
+            "id": "live_protection_chain",
+            "label": "止损/止盈保护单链路",
+            "status": protection_chain.get("status", "warn"),
+            "detail": protection_chain.get("detail") or "等待保护单链路复盘。",
         },
         {
             "id": "oms_postflight_reconciled",
@@ -12417,6 +12591,7 @@ def live_pilot_postflight_status(symbol: str = "BTCUSDT", run_id: str = "") -> d
         "failed_checks": failed,
         "warnings": warned,
         "orders": live_orders[:10],
+        "protection_chain": protection_chain,
         "oms": oms,
         "alerts": alerts.get("summary") or {},
         "audit_chain": {

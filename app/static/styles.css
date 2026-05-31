@@ -1150,6 +1150,58 @@ body[data-active-view="research"] .architecture-panel {
   padding: 9px;
 }
 
+.live-pilot-panel .guardrail-list article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid #e3ebf5;
+}
+
+.live-pilot-panel .guardrail-list article:last-child {
+  border-bottom: 0;
+}
+
+.live-pilot-panel .guardrail-list article strong {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  color: #243247;
+  line-height: 1.35;
+}
+
+.live-pilot-panel .guardrail-list article p {
+  margin: 0;
+  color: #647084;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.live-pilot-panel .guardrail-list article code {
+  display: block;
+  min-width: 0;
+  padding: 6px 7px;
+  border-radius: 6px;
+  background: #eef4ff;
+  color: #1d3557;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.live-pilot-panel .guardrail-list .postflight-focus {
+  margin: -1px -2px 3px;
+  padding: 8px;
+  border: 1px solid #cfdff2;
+  border-radius: 7px;
+  background: #f5f9ff;
+}
+
+.live-pilot-panel .guardrail-list .postflight-muted {
+  padding-top: 6px;
+  opacity: 0.82;
+}
+
 .live-pilot-panel .muted-text {
   min-height: 0;
   margin: 0 0 8px;

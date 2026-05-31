@@ -54,6 +54,7 @@ def main() -> int:
             "oms",
             "alerts",
             "audit_chain",
+            "protection_chain",
             "exchange_recovery",
             "final_live_ready_prearm",
             "next_actions",
@@ -66,6 +67,7 @@ def main() -> int:
             "selected_live_run",
             "run_terminal",
             "live_order_evidence",
+            "live_protection_chain",
             "oms_postflight_reconciled",
             "alerts_postflight",
             "audit_chain_postflight",
@@ -78,6 +80,16 @@ def main() -> int:
             return fail("postflight response is missing required checks", {"missing_checks": missing_checks, "check_ids": sorted(check_ids)})
         if postflight.get("symbol") != symbol:
             return fail("postflight response did not preserve symbol", postflight)
+        protection_chain = postflight.get("protection_chain")
+        if not isinstance(protection_chain, dict):
+            return fail("postflight protection_chain is not an object", postflight)
+        chain_required = {"status", "ok", "parent_order_id", "child_count", "missing_kinds", "detail"}
+        chain_missing = sorted(chain_required - set(protection_chain))
+        if chain_missing:
+            return fail(
+                "postflight protection_chain is missing required keys",
+                {"missing": chain_missing, "protection_chain": protection_chain},
+            )
 
         ai_result = request_json("POST", "/api/ai-operator/chat", {"message": f"/live-postflight {symbol}"})
         serialized = json.dumps(ai_result, ensure_ascii=False)

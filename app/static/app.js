@@ -1768,25 +1768,51 @@ function renderLivePostflight(postflight) {
   const oms = postflight.oms || {};
   const alerts = postflight.alerts || {};
   const audit = postflight.audit_chain || {};
+  const protection = postflight.protection_chain || {};
+  const otherChecks = checks.filter((check) => check.id !== "live_protection_chain");
+  let visibleChecks = otherChecks.filter((check) => check.status !== "pass").slice(0, 4);
+  if (!visibleChecks.length) visibleChecks = otherChecks.slice(0, 4);
+  const hiddenChecksCount = Math.max(otherChecks.length - visibleChecks.length, 0);
+  const missingKinds = (protection.missing_kinds || []).map((kind) => ({
+    stop_loss: "止损",
+    take_profit: "止盈",
+  }[kind] || kind));
+  const childStatusText =
+    Object.entries(protection.child_statuses || {})
+      .map(([kind, value]) => `${kind === "stop_loss" ? "止损" : kind === "take_profit" ? "止盈" : kind}: ${value}`)
+      .join(" / ") || "暂无子单";
+  const protectionLead = protection.status === "fail" ? protection.detail : "";
   els.livePostflightStatus.textContent = statusMap[status] || status;
   els.livePostflightSummary.textContent =
-    actions.slice(0, 2).map(livePilotText).join("；") ||
+    [protectionLead, ...actions].filter(Boolean).slice(0, 2).map(livePilotText).join("；") ||
     "实盘首单后验检查通过；继续按小额、短时、单笔预算扩大。";
   els.livePostflightList.innerHTML = `
     <article>
       <strong>复盘状态<span class="badge ${badgeMap[status] || "warn"}">${escapeHtml(statusMap[status] || status)}</span></strong>
       <p>交易对 ${escapeHtml(postflight.symbol || "-")}；运行 ${escapeHtml(postflight.run_id || "-")}；关联实盘订单 ${fmt(orders.length)} 个。</p>
     </article>
+    <article class="postflight-focus">
+      <strong>止损 / 止盈保护链<span class="badge ${badgeMap[protection.status] || "warn"}">${escapeHtml(statusMap[protection.status] || protection.status || "待检查")}</span></strong>
+      <p>${escapeHtml(livePilotText(protection.detail || "等待首单后复盘保护单。"))}</p>
+      <p>父单 ${escapeHtml(protection.parent_order_id || "-")}；子单 ${fmt(protection.child_count || 0)} 个；缺失 ${escapeHtml(missingKinds.join("、") || "无")}；孤儿 ${fmt(protection.orphan_child_count || 0)} 个。</p>
+      <code>${escapeHtml(childStatusText)}</code>
+    </article>
     <article>
       <strong>OMS / 告警 / 审计</strong>
       <p>待对账 ${fmt(oms.needs_reconcile || 0)}；未知状态 ${fmt(oms.unknown_venue_status || 0)}；活跃告警 ${fmt(alerts.active || 0)}；审计断链 ${fmt(audit.broken_count || 0)}。</p>
     </article>
-    ${checks.map((check) => `
+    ${visibleChecks.map((check) => `
       <article>
         <strong>${escapeHtml(check.label || check.id || "检查项")}<span class="badge ${badgeMap[check.status] || "warn"}">${escapeHtml(statusMap[check.status] || check.status || "-")}</span></strong>
         <p>${escapeHtml(livePilotText(check.detail || "-"))}</p>
       </article>
     `).join("")}
+    ${hiddenChecksCount ? `
+      <article class="postflight-muted">
+        <strong>已折叠通过项<span class="badge pass">${fmt(hiddenChecksCount)} 项</span></strong>
+        <p>只保留阻塞、待处理和关键保护链路，减少页面滚动。</p>
+      </article>
+    ` : ""}
   `;
 }
 
